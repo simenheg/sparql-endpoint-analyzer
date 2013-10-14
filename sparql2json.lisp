@@ -42,12 +42,16 @@
 
 (defun filter-whitelist (values)
   (loop for prefix in (split #\Newline (conf :uri-whitelist)) do
-    (setf values (remove-if-not (lambda (v) (string-prefix-p prefix v)) values)))
+    (setf values
+          (remove-if-not
+           (lambda (v) (string-prefix-p prefix v)) values :key #'first)))
   values)
 
 (defun filter-blacklist (values)
   (loop for prefix in (split #\Newline (conf :uri-blacklist)) do
-    (setf values (remove-if (lambda (v) (string-prefix-p prefix v)) values)))
+    (setf values
+          (remove-if
+           (lambda (v) (string-prefix-p prefix v)) values :key #'first)))
   values)
 
 ;; --------------------------------------------------------------- [ SPARQL ]
@@ -80,16 +84,18 @@
                (bindings (assoc :bindings (rest results))))
           (rest bindings)))))
 
-;; (defun binding-values (bindings)
-;;   (mapcar (lambda (b) (cdr (caddar b))) bindings))
-
 (defun bindings-to-lists (bindings)
   (mapcar (lambda (b) (mapcar #'cdaddr b)) bindings))
 
 (defun query-to-uri-list (query)
-  (let ((values (binding-values (query-to-bindings (conf :endpoint) query))))
-    (filter-blacklist
-     (filter-whitelist values))))
+  (let ((values
+         (bindings-to-lists
+          (query-to-bindings (conf :endpoint) query))))
+    (remove-duplicates
+     (filter-blacklist
+      (filter-whitelist values))
+     :test #'string=
+     :key #'first)))
 
 (defun split-uri (uri)
   "Split URI into stem and resource."
@@ -172,7 +178,8 @@
   (handler-case
       (let ((res (query-to-uri-list (make-query section concept))))
         (fmt-err "ok~%")
-        (remove-duplicates res :test #'string=))
+        (fmt-err "~%~a~%~%" res)
+        res)
     (sparql-transaction-time-out ()
       (fmt-err "timeout~%")
       (fmt-err "Retrying in 5 seconds ")
@@ -182,6 +189,10 @@
 
 (defun slurp ()
   (init-config)
-  (let ((concepts (retrieve :concepts)))
+  (let ((concepts (mapcar #'first (retrieve :concepts))))
     (dolist (c concepts)
-      (retrieve :literals c))))
+      (retrieve :literals c))
+    (dolist (c concepts)
+      (retrieve :outgoing-links c))
+    (dolist (c concepts)
+      (retrieve :incoming-links c))))
