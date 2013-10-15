@@ -106,28 +106,88 @@
   "Return the resource from a URI."
   (nth-value 1 (split-uri uri)))
 
-(defun list-to-json (list)
-  (with-output-to-string (s)
-    (format s "[~%~{~a~^, ~}~%]" list)))
+(defun looks-like-plist-p (list)
+  "Return T if LIST looks like a plist (first element is a keyword)."
+  (and (listp list) (keywordp (first list))))
 
-(defun plist-to-json (plist)
-  (with-output-to-string (s)
-    (format s "{~%~{    \"~a\": \"~a\"~^,~%~}~%}" plist)))
+(defun indented-list (list indent n)
+  "Return a copy of LIST where INDENT spaces precedes every Nth element."
+  (interleave
+   (make-list (/ (length list) n) :initial-element (spaces indent)) list n))
+
+(defun to-json (obj &optional (indent 0))
+  (incf indent 4)
+  (cond
+    ((looks-like-plist-p obj)
+     (with-output-to-string (s)
+       (format
+        s "{~%~{a~a\"~a\": \"~a\"~^,~%~}~%}"
+        (mapcar (lambda (o) (to-json o indent))
+                (indented-list obj indent 2))
+        ;; s "{~%~{    \"~a\": \"~a\"~^,~%~}~%}"
+        ;; (mapcar (lambda (o) (to-json o (+ indent 4))) obj)
+        )))
+    ((listp obj)
+     (with-output-to-string (s)
+       (format
+        ;; s "[~%~{~a~^, ~}~%]"
+        ;; (mapcar (lambda (o) (to-json o (+ indent 4))) obj)
+        s "[~%~{b~a~a~^, ~}~%]"
+        (mapcar (lambda (o) (to-json o indent))
+                (indented-list obj indent 1)))))
+    (t obj)))
+
+;; (defun list-to-json (list)
+;;   (with-output-to-string (s)
+;;     (format s "[~%~{~a~^, ~}~%]" list)))
+
+;; (defun plist-to-json (plist)
+;;   (with-output-to-string (s)
+;;     (format s "{~%~{    \"~a\": \"~a\"~^,~%~}~%}" plist)))
 
 (defun resource-to-id (prefix resource)
   (strcat prefix "_" resource))
 
+(defun uri-to-plist (concept-uri)
+  (multiple-value-bind (stem resource) (split-uri concept-uri)
+    (list :|id| (resource-to-id (uri-guess-prefix stem) resource)
+          :|uri| concept-uri
+          :|label| resource)))
+
 (defun uri-list-to-json (uri-list)
   (let ((resources '()))
     (dolist (uri uri-list)
-      (multiple-value-bind (stem resource) (split-uri uri)
-        (push
-         (list "id" (resource-to-id (uri-guess-prefix stem) resource)
-               "uri" uri
-               "label" resource
-               "display" "rdf_label")
-         resources)))
-    (format t (list-to-json (mapcar #'plist-to-json resources)))))
+      (push (uri-to-plist uri) resources))
+    (format t (to-json resources))))
+
+(defun concepts-to-json (concepts)
+  (format t "var json~aTypes = " (conf :dataset-name))
+  (uri-list-to-json (mapcar #'concept-uri concepts)))
+
+(defun datatype-properties-to-json (datatype-properties)
+  (format t "var json~aDatatypeProperties = " (conf :dataset-name))
+  (uri-list-to-json datatype-properties))
+
+(defun object-properties-to-json (object-properties)
+  (format t "var json~aObjectProperties = " (conf :dataset-name))
+  (uri-list-to-json (mapcar #'second object-properties)))
+
+(defun link-to-plist (link)
+  (destructuring-bind (link-name target-type) link
+    (list :|propId| link-name
+          :|target| target-type)))
+
+(defun outgoing-links-to-json (concepts)
+  (format t "var json~aOutgoingLinks = " (conf :dataset-name))
+  (let ((link-list
+         (loop for c in concepts
+               when (concept-outgoing-links c) collect
+           (multiple-value-bind (stem resource) (split-uri (concept-uri c))
+             (list :|typeId|
+                   (resource-to-id (uri-guess-prefix stem) resource)
+                   :|outgoingLinks|
+                   (mapcar #'link-to-plist (concept-outgoing-links c)))))))
+    (to-json link-list)))
 
 ;; ---------------------------------------------- [ SPARQL-entry inspectors ]
 (defun sparql-entry-field (entry)
@@ -141,9 +201,7 @@
 
 ;; -------------------------------------------------------------- [ Slurper ]
 
-;;; TODO:THIS IS TIMING OUT
-;;;
-;;; (time (retrieve :literals "http://data.computas.com/informasjonsmodell/regnskapsregisteret/Regnskap"))
+;;; Hard limit: 10,000. Might not get all the results.
 
 (defun make-query (section &optional concept)
   (ecase section
@@ -151,26 +209,24 @@
      "SELECT DISTINCT ?concept WHERE { ?obj a ?concept . }")
     (:literals
      (fmt
-      "SELECT ?prop WHERE {
+      "SELECT REDUCED ?prop WHERE {
          ?obj a <~a> .
          ?obj ?prop ?targetObj .
        FILTER (isLiteral(?targetObj)) }"
       concept))
     (:outgoing-links
      (fmt
-      "SELECT ?prop ?targetType WHERE {
+      "SELECT REDUCED ?prop ?targetType WHERE {
          ?obj a <~a> .
          ?obj ?prop ?targetObj . 
          ?targetObj a ?targetType . }"
       concept))
     (:incoming-links
      (fmt
-      "SELECT ?prop WHERE {
+      "SELECT REDUCED ?prop WHERE {
          ?obj a <~a> .
          ?something ?prop ?obj . }"
-      concept))
-    (:heavy
-     "SELECT DISTINCT ?link WHERE { ?enhet a ?anything . ?enhet ?link ?obj . ?obj a ?what . }")))
+      concept))))
 
 (defun retrieve (section &optional concept)
   (fmt-err "Retrieving ~a~@[ for ~a~] ... "
@@ -178,7 +234,7 @@
   (handler-case
       (let ((res (query-to-uri-list (make-query section concept))))
         (fmt-err "ok~%")
-        (fmt-err "~%~a~%~%" res)
+        ;; (fmt-err "~%~a~%~%" res)
         res)
     (sparql-transaction-time-out ()
       (fmt-err "timeout~%")
@@ -187,12 +243,69 @@
       (sleep 5)
       (retrieve section concept))))
 
+;; types (concept flat list)
+;; object properties (object properties flat list)
+;; outgoing links (concept -> outgoing object property list)
+;; incoming links (concept -> incoming object property list)
+;; datatype properties (datatype property flat list)
+;; literal values (concept -> literal value type/range list)
+
+(defparameter test
+  '(("http://data.computas.com/informasjonsmodell/organisasjon/Enhet"
+     "http://data.computas.com/informasjonsmodell/organisasjon/nacekode"
+     "http://data.computas.com/informasjonsmodell/nace/Nacekode")
+    ("http://data.computas.com/informasjonsmodell/organisasjon/Enhet"
+     "http://data.computas.com/informasjonsmodell/organisasjon/organisasjonsform"
+     "http://data.computas.com/informasjonsmodell/organisasjon/Enhetskode")
+    ("http://data.computas.com/informasjonsmodell/organisasjon/Enhet"
+     "http://data.computas.com/informasjonsmodell/regnskapsregisteret/regnskap"
+     "http://data.computas.com/informasjonsmodell/regnskapsregisteret/Regnskap")))
+
+(defstruct concept uri outgoing-links incoming-links)
+
 (defun slurp ()
   (init-config)
-  (let ((concepts (mapcar #'first (retrieve :concepts))))
-    (dolist (c concepts)
-      (retrieve :literals c))
-    (dolist (c concepts)
-      (retrieve :outgoing-links c))
-    (dolist (c concepts)
-      (retrieve :incoming-links c))))
+  (let ((concepts ;; (mapcar #'first (retrieve :concepts))
+         )
+        (datatype-properties '())
+        (object-properties test))
+
+    (push
+     (make-concept
+      :uri "http://data.computas.com/informasjonsmodell/organisasjon/Enhet")
+     concepts)
+
+    (push
+     (make-concept
+      :uri "http://data.computas.com/informasjonsmodell/organisasjon/Person")
+     concepts)
+
+    (push
+     (make-concept
+      :uri "http://data.computas.com/informasjonsmodell/lokasjon/Adresse")
+     concepts)
+
+    (loop for (concept-uri link-name target-type) in object-properties do
+      (let ((concept (find concept-uri concepts
+                           :key #'concept-uri
+                           :test #'string=)))
+        (pushnew (list link-name target-type)
+                 (concept-outgoing-links concept)
+                 :test #'equal)))
+
+    (concepts-to-json concepts)
+    ;; (object-properties-to-json object-properties)
+    ;; (outgoing-links-to-json concepts)
+    
+    ;; (dolist (c concepts)
+    ;;   (dolist (dprop (retrieve :literals c))
+    ;;     (pushnew (first dprop) datatype-properties :test #'string=)))
+
+    ;; (dolist (c concepts)
+    ;;   (dolist (oprop (retrieve :outgoing-links c))
+    ;;     (pushnew (first oprop) object-properties :test #'string=)))
+
+    ;; (dolist (c concepts)
+    ;;   (dolist (oprop (retrieve :incoming-links c))
+    ;;     (pushnew (first oprop) object-properties :test #'string=)))
+))

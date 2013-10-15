@@ -3,6 +3,7 @@
   (:export
    :fmt
    :fmt-err
+   :spaces
    :*whitespace*
    :strcat
    :string-prefix-p
@@ -20,6 +21,26 @@
 (defun fmt-err (&rest args)
   "Print format string ARGS to standard error output."
   (apply #'format *error-output* args))
+
+(defun interleave (list1 list2 &optional (n 1))
+  "Interleave, taking N elements from LIST2 for every element of LIST1."
+  (cond
+    ((null list1) list2)
+    ((null list2) list1)
+    (t (multiple-value-bind (part1 part2) (split-seq n list2)
+         (append (list (first list1)) part1
+                 (interleave (rest list1) part2 n))))))
+
+(defun spaces (amount)
+  "Return a string of AMOUNT spaces."
+  (make-string amount :initial-element #\Space))
+
+(defun split-seq (n seq)
+  "Return the two sequences resulting from splitting SEQ at position N."
+  (if (> n (length seq))
+      (values seq '())
+      (values (subseq seq 0 n)
+              (subseq seq n (length seq)))))
 
 (defun strcat (&rest strings)
   "Return the concatenation of STRINGS."
