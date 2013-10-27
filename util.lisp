@@ -22,15 +22,6 @@
   "Print format string ARGS to standard error output."
   (apply #'format *error-output* args))
 
-(defun interleave (list1 list2 &optional (n 1))
-  "Interleave, taking N elements from LIST2 for every element of LIST1."
-  (cond
-    ((null list1) list2)
-    ((null list2) list1)
-    (t (multiple-value-bind (part1 part2) (split-seq n list2)
-         (append (list (first list1)) part1
-                 (interleave (rest list1) part2 n))))))
-
 (defun spaces (amount)
   "Return a string of AMOUNT spaces."
   (make-string amount :initial-element #\Space))

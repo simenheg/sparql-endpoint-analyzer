@@ -5,8 +5,9 @@
 (in-package :config)
 
 (defun config-file-to-string-list (file-path)
-  (let ((file-contents (read-file-into-string file-path)))
-    (rest (split "\\[(.*)\\]" file-contents :with-registers-p t))))
+  (let* ((file-contents (read-file-into-string file-path))
+         (without-comments (regex-replace-all "##.*" file-contents "")))
+    (rest (split "\\[(.*)\\]" without-comments :with-registers-p t))))
 
 (defun string-list-to-plist (string-list)
   (loop for (section content) on string-list by #'cddr append
