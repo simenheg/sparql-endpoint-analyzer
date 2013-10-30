@@ -1,7 +1,6 @@
 (defpackage :util
   (:use :cl)
   (:export
-   :+utf-8+
    :*whitespace*
    :fmt
    :fmt-err
@@ -12,9 +11,6 @@
    :take))
 
 (in-package :util)
-
-(defconstant +utf-8+
-  (flexi-streams:make-external-format :utf8 :eol-style :lf))
 
 (defvar *whitespace* '(#\Space #\Tab #\Newline))
 

@@ -1,4 +1,4 @@
-#!/usr/bin/sbcl --script
+;#!/usr/bin/sbcl --script
 
 #-quicklisp
 (let ((quicklisp-init-1
@@ -93,7 +93,7 @@
   (let* ((mode (if (search "CONSTRUCT" query) 'CONSTRUCT 'SELECT))
          (url (format nil "~a?query=~a&output=~a"
                       endpoint
-                      (drakma:url-encode query +utf-8+)
+                      (drakma:url-encode query :utf-8)
                       (if (eq mode 'CONSTRUCT) "ttl" "json")))
          (res (drakma:http-request url :preserve-uri t)))
     (when (search "timed out" res)
@@ -346,39 +346,42 @@
          ?X0 <~a> ?val . }"
       concept property))))
 
-(defun repeated-retrieve (section limit offset results
-                          &optional concept property)
-  (fmt-err "[paged] Retrieving ~a~@[ for ~a~] (~a to ~a) ... "
-           (string-downcase section) (and concept (uri-resource concept))
-           offset (+ limit offset))
-  (handler-case
-      (multiple-value-bind (res n)
-          (let ((query
-                 (make-query
-                  section :paged
-                  :limit limit
-                  :offset offset
-                  :concept concept)))
-            (query-to-uri-list query))
-        (let ((old-length (length results)))
-          (dolist (r res)
-            (pushnew r results :test #'equal))
-          (fmt-err "ok (found ~a new, checked ~a)~%"
-                   (- (length results) old-length) n))
-        (if (= n limit)
-            (repeated-retrieve
-             section limit (+ offset limit) results concept property)
-            results))
-    (sparql-transaction-time-out ()
-      (fmt-err "timeout~%")
-      (fmt-err "Retrying in 20 seconds ")
-      (fmt-err "(This should not happen. Please tell Simen) ...~%")
-      (sleep 20)
-      (repeated-retrieve limit offset results concept property))))
+(defun repeated-retrieve (section limit page results
+                          &key concept property page-limit)
+  (fmt-err
+   "[page ~a] Retrieving ~a~@[ for ~a~] ... "
+   (+ page 1) (string-downcase section) (and concept (uri-resource concept)))
+  (let ((offset (* limit page)))
+    (handler-case
+        (multiple-value-bind (res n)
+            (let ((query
+                   (make-query
+                    section :paged
+                    :limit limit
+                    :offset offset
+                    :concept concept)))
+              (query-to-uri-list query))
+          (setf results (append res results))
+          (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
+          (cond
+            ((or (/= n limit) (= (+ page 1) page-limit))
+             (fmt-err "All  ... removing duplicates ...")
+             (remove-duplicates results :test #'equal))
+            (t
+             (repeated-retrieve
+              section limit (+ page 1) results
+              :concept concept :property property :page-limit page-limit))))
+      (sparql-transaction-time-out ()
+        (fmt-err "timeout~%")
+        (fmt-err "Retrying in 20 seconds ")
+        (sleep 20)
+        (repeated-retrieve
+         section limit page results
+         :concept concept :property property :page-limit page-limit)))))
 
 (defun retrieve (section &optional concept property)
   (fmt-err "[~a] Retrieving ~a~@[ for ~a~] ... "
-           (conf :strategy)
+           (conf :timeout-strategy)
            (string-downcase section)
            (and concept (uri-resource concept)))
   (handler-case
@@ -386,7 +389,7 @@
           (let ((query
                  (make-query
                   section
-                  (string-to-keyword (conf :strategy))
+                  (string-to-keyword (conf :timeout-strategy))
                   :offset 0
                   :concept concept
                   :property property)))
@@ -397,7 +400,11 @@
       (fmt-err "timeout~%")
       (fmt-err "Going for paged retrieval ... this may take some time ...~%")
       (repeated-retrieve
-       section (parse-integer (conf :limit)) 0 '() concept property))))
+       section (parse-integer (conf :results-per-page-limit)) 0 '()
+       :concept concept
+       :property property
+       :page-limit (let ((page-limit (parse-integer (conf :page-limit))))
+                    (and (/= page-limit 0) page-limit))))))
 
 (defun get-concept (uri concept-list)
   "Return concept with URI from CONCEPT-LIST."
@@ -474,4 +481,4 @@
         (sb-sys:interactive-interrupt ()
           (fmt-err "~%Bye.~%")))))
 
-(main)
+;; (main)
