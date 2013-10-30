@@ -11,10 +11,10 @@
         (load quicklisp-init-2))))
 
 (let ((*standard-output* *error-output*))
+  (ql:quickload :flexi-streams)
   (ql:quickload :drakma)
   (ql:quickload :cl-json)
   (ql:quickload :cl-who)
-  (ql:quickload :hunchentoot)
   (ql:quickload :alexandria)
   (ql:quickload :cl-ppcre))
 
@@ -93,7 +93,7 @@
   (let* ((mode (if (search "CONSTRUCT" query) 'CONSTRUCT 'SELECT))
          (url (format nil "~a?query=~a&output=~a"
                       endpoint
-                      (hunchentoot:url-encode query)
+                      (drakma:url-encode query +utf-8+)
                       (if (eq mode 'CONSTRUCT) "ttl" "json")))
          (res (drakma:http-request url :preserve-uri t)))
     (when (search "timed out" res)
