@@ -10,12 +10,13 @@
       (when (probe-file quicklisp-init-2)
         (load quicklisp-init-2))))
 
-(ql:quickload :drakma)
-(ql:quickload :cl-json)
-(ql:quickload :cl-who)
-(ql:quickload :hunchentoot)
-(ql:quickload :alexandria)
-(ql:quickload :cl-ppcre)
+(let ((*standard-output* *error-output*))
+  (ql:quickload :drakma)
+  (ql:quickload :cl-json)
+  (ql:quickload :cl-who)
+  (ql:quickload :hunchentoot)
+  (ql:quickload :alexandria)
+  (ql:quickload :cl-ppcre))
 
 (load "util.lisp")
 (load "config.lisp")
@@ -50,7 +51,7 @@
       (let ((guess (first (last (split "/" uri)))))
         (take 3 guess))))
 
-(defun init-config (&optional (file-path "settings.conf"))
+(defun init-config (file-path)
   "Initialize *CONFIG* based on config file found at FILE-PATH."
   (handler-case
       (setf *config* (read-config-file file-path))
@@ -66,10 +67,11 @@
 
 (defun filter-whitelist (values)
   "Return copy of VALUES where every value has a prefix from the whitelist."
-  (loop for prefix in (split #\Newline (conf :uri-whitelist)) do
+  (let ((prefixes (split #\Newline (conf :uri-whitelist))))
     (setf values
           (remove-if-not
-           (lambda (v) (or (not (uri-p v)) (string-prefix-p prefix v)))
+           (lambda (v) (or (not (uri-p v))
+                      (some (lambda (p) (string-prefix-p p v)) prefixes)))
            values :key #'first)))
   values)
 
@@ -121,10 +123,14 @@
       ((string= type "typed-literal")
        (cdr (cadddr binding)))
       ((string= type "literal")
-       (cdaddr binding)))))
+       (cdaddr binding))
+      (t nil))))
 
 (defun bindings-to-lists (bindings)
-  (mapcar (lambda (b) (mapcar #'binding-to-uri b)) bindings))
+  (mapcar (lambda (b) (mapcar #'binding-to-uri b))
+          (remove-if (lambda (type) (equal "bnode" type))
+                     bindings
+                     :key #'cdadar)))
 
 (defun query-to-uri-list (query)
   (let ((values
@@ -152,6 +158,7 @@
   (and (listp list) (keywordp (first list))))
 
 (defun to-json (obj)
+  "Return JSON-representation of lisp OBJ."
   (cond
     ((looks-like-plist-p obj)
      (fmt "{~%~{~a: ~a~^,~%~}~%}" (mapcar #'to-json obj)))
@@ -437,8 +444,8 @@
            (retrieve
             :integer-limits (concept-uri concept) (first literal)))))))))
 
-(defun slurp ()
-  (init-config)
+(defun slurp (config-file-path)
+  (init-config config-file-path)
   (let ((concepts
          (mapcar (lambda (c) (make-concept :uri (first c))) (retrieve :concepts))))
     
@@ -463,8 +470,8 @@
        :toplevel #'main
        :executable t)
       (handler-case
-          (slurp)
+          (slurp (or (second args) "settings.conf"))
         (sb-sys:interactive-interrupt ()
-          (fmt-err "~Bye.~%")))))
+          (fmt-err "~%Bye.~%")))))
 
 (main)
