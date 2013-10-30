@@ -137,11 +137,8 @@
          (bindings-to-lists
           (query-to-bindings (conf :endpoint) query))))
     (values
-     (remove-duplicates
-      (filter-blacklist
-       (filter-whitelist values))
-      :test #'string=
-      :key #'first)
+     (filter-blacklist
+      (filter-whitelist values))
      (length values))))
 
 (defun split-uri (uri)
@@ -363,14 +360,11 @@
               (query-to-uri-list query))
           (setf results (append res results))
           (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
-          (cond
-            ((or (/= n limit) (= (+ page 1) page-limit))
-             (fmt-err "All  ... removing duplicates ...")
-             (remove-duplicates results :test #'equal))
-            (t
-             (repeated-retrieve
-              section limit (+ page 1) results
-              :concept concept :property property :page-limit page-limit))))
+          (if (or (/= n limit) (= (+ page 1) page-limit))
+              (remove-duplicates results :test #'string= :key #'first)
+              (repeated-retrieve
+               section limit (+ page 1) results
+               :concept concept :property property :page-limit page-limit)))
       (sparql-transaction-time-out ()
         (fmt-err "timeout~%")
         (fmt-err "Retrying in 20 seconds ")
@@ -381,7 +375,7 @@
 
 (defun retrieve (section &optional concept property)
   (fmt-err "[~a] Retrieving ~a~@[ for ~a~] ... "
-           (conf :timeout-strategy)
+           (conf :strategy)
            (string-downcase section)
            (and concept (uri-resource concept)))
   (handler-case
@@ -389,13 +383,13 @@
           (let ((query
                  (make-query
                   section
-                  (string-to-keyword (conf :timeout-strategy))
+                  (string-to-keyword (conf :strategy))
                   :offset 0
                   :concept concept
                   :property property)))
             (query-to-uri-list query))
         (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
-        res) 
+        (remove-duplicates res :test #'string= :key #'first)) 
     (sparql-transaction-time-out ()
       (fmt-err "timeout~%")
       (fmt-err "Going for paged retrieval ... this may take some time ...~%")
