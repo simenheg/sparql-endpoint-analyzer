@@ -67,7 +67,7 @@
 
 (defun filter-whitelist (values)
   "Return copy of VALUES where every value has a prefix from the whitelist."
-  (let ((prefixes (split #\Newline (conf :uri-whitelist))))
+  (when-let ((prefixes (split #\Newline (conf :uri-whitelist))))
     (setf values
           (remove-if-not
            (lambda (v) (or (not (uri-p v))
