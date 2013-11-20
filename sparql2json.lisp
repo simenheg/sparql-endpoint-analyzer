@@ -420,7 +420,7 @@
          (links (retrieve link-type (concept-uri concept))))
     (loop for (link-name target-uri) in links do
       (add-link link-name target-uri concept link-type)
-      (let ((target-concept (get-concept target-uri concept-list)))
+      (when-let ((target-concept (get-concept target-uri concept-list)))
         (add-link
          link-name (concept-uri concept) target-concept mirror-link)))))
 
@@ -448,8 +448,8 @@
 (defun slurp (config-file-path)
   (init-config config-file-path)
   (let ((concepts
-         (mapcar (lambda (c) (make-concept :uri (first c))) (retrieve :concepts))))
-    
+         (mapcar (lambda (c) (make-concept :uri (first c)))
+                 (retrieve :concepts))))
     (dolist (c concepts)
       (add-links c :outgoing-links concepts)
       (add-links c :incoming-links concepts)
