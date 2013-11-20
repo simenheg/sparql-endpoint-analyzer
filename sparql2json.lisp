@@ -143,7 +143,7 @@
 
 (defun split-uri (uri)
   "Split URI into stem and resource."
-  (let ((pos (+ (position #\/ uri :from-end t) 1)))
+  (let ((pos (+ (position-if (lambda (c) (find c "/#")) uri :from-end t) 1)))
     (values (take pos uri) (subseq uri pos (length uri)))))
 
 (defun uri-resource (uri)
