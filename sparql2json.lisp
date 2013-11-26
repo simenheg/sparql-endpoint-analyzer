@@ -361,7 +361,7 @@
           (setf results (append res results))
           (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
           (if (or (/= n limit) (= (+ page 1) page-limit))
-              (remove-duplicates results :test #'string= :key #'first)
+              (remove-duplicates results :test #'equal :key #'first)
               (repeated-retrieve
                section limit (+ page 1) results
                :concept concept :property property :page-limit page-limit)))
@@ -389,7 +389,7 @@
                   :property property)))
             (query-to-uri-list query))
         (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
-        (remove-duplicates res :test #'string= :key #'first)) 
+        (remove-duplicates res :test #'equal :key #'first))
     (sparql-transaction-time-out ()
       (fmt-err "timeout~%")
       (fmt-err "Going for paged retrieval ... this may take some time ...~%")
