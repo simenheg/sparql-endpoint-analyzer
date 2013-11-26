@@ -356,7 +356,8 @@
                     section :paged
                     :limit limit
                     :offset offset
-                    :concept concept)))
+                    :concept concept
+                    :property property)))
               (query-to-uri-list query))
           (setf results (append res results))
           (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
