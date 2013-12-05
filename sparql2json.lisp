@@ -86,7 +86,11 @@
 ;; --------------------------------------------------------------- [ SPARQL ]
 (define-condition sparql-transaction-time-out (error) ())
 
-(defstruct concept uri outgoing-links incoming-links literals)
+(defstruct concept
+  (uri "" :type string)
+  (outgoing-links '() :type list)
+  (incoming-links '() :type list)
+  (literals '() :type list))
 
 (defun sparql-query (endpoint query)
   "Send QUERY to ENDPOINT; return result as string."
