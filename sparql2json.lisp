@@ -349,9 +349,11 @@
 
 (defun repeated-retrieve (section limit page results
                           &key concept property page-limit)
-  (fmt-err
-   "[page ~a] Retrieving ~a~@[ for ~a~] ... "
-   (+ page 1) (string-downcase section) (and concept (uri-resource concept)))
+  (fmt-err "[page ~a] Retrieve ~a~@[ for ~a~]~@[/~a~] ... "
+           (+ page 1)
+           (string-downcase section)
+           (and concept (uri-resource concept))
+           (and property (uri-resource property)))
   (let ((offset (* limit page)))
     (handler-case
         (multiple-value-bind (res n)
@@ -379,10 +381,11 @@
          :concept concept :property property :page-limit page-limit)))))
 
 (defun retrieve (section &optional concept property)
-  (fmt-err "[~a] Retrieving ~a~@[ for ~a~] ... "
+  (fmt-err "[~a] Retrieve ~a~@[ for ~a~]~@[/~a~] ... "
            (conf :strategy)
            (string-downcase section)
-           (and concept (uri-resource concept)))
+           (and concept (uri-resource concept))
+           (and property (uri-resource property)))
   (handler-case
       (multiple-value-bind (res n)
           (let ((query
