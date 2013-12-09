@@ -83,6 +83,9 @@
            (lambda (v) (string-prefix-p prefix v)) values :key #'first)))
   values)
 
+(defun filter (values)
+  (filter-whitelist (filter-blacklist values)))
+
 ;; --------------------------------------------------------------- [ SPARQL ]
 (define-condition sparql-transaction-time-out (error) ())
 
@@ -140,10 +143,7 @@
   (let ((values
          (bindings-to-lists
           (query-to-bindings (conf :endpoint) query))))
-    (values
-     (filter-blacklist
-      (filter-whitelist values))
-     (length values))))
+    values))
 
 (defun split-uri (uri)
   "Split URI into stem and resource."
@@ -356,19 +356,19 @@
            (and property (uri-resource property)))
   (let ((offset (* limit page)))
     (handler-case
-        (multiple-value-bind (res n)
-            (let ((query
-                   (make-query
-                    section :paged
-                    :limit limit
-                    :offset offset
-                    :concept concept
-                    :property property)))
-              (query-to-uri-list query))
+        (let* ((query
+                (make-query
+                 section :paged
+                 :limit limit
+                 :offset offset
+                 :concept concept
+                 :property property))
+               (res (query-to-uri-list query))
+               (n (length res)))
           (setf results (append res results))
-          (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
+          (fmt-err "ok (got ~a)~%" n)
           (if (or (/= n limit) (= (+ page 1) page-limit))
-              (remove-duplicates results :test #'equal :key #'first)
+              results
               (repeated-retrieve
                section limit (+ page 1) results
                :concept concept :property property :page-limit page-limit)))
@@ -387,16 +387,16 @@
            (and concept (uri-resource concept))
            (and property (uri-resource property)))
   (handler-case
-      (multiple-value-bind (res n)
-          (let ((query
-                 (make-query
-                  section
-                  (string-to-keyword (conf :strategy))
-                  :offset 0
-                  :concept concept
-                  :property property)))
-            (query-to-uri-list query))
-        (fmt-err "ok (found ~a, checked ~a)~%" (length res) n)
+      (let* ((query
+              (make-query
+               section
+               (string-to-keyword (conf :strategy))
+               :offset 0
+               :concept concept
+               :property property))
+             (res (query-to-uri-list query))
+             (n (length res)))
+        (fmt-err "ok (got ~a)~%" n)
         (remove-duplicates res :test #'equal :key #'first))
     (sparql-transaction-time-out ()
       (fmt-err "timeout~%")
@@ -406,7 +406,7 @@
        :concept concept
        :property property
        :page-limit (let ((page-limit (parse-integer (conf :page-limit))))
-                    (and (/= page-limit 0) page-limit))))))
+                     (and (/= page-limit 0) page-limit))))))
 
 (defun get-concept (uri concept-list)
   "Return concept with URI from CONCEPT-LIST."
