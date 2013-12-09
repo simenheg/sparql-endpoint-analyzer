@@ -349,7 +349,7 @@
 
 (defun repeated-retrieve (section limit page results
                           &key concept property page-limit)
-  (fmt-err "[page ~a] Retrieve ~a~@[ for ~a~]~@[/~a~] ... "
+  (fmt-err "[page ~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
            (+ page 1)
            (string-downcase section)
            (and concept (uri-resource concept))
@@ -381,7 +381,7 @@
          :concept concept :property property :page-limit page-limit)))))
 
 (defun retrieve (section &optional concept property)
-  (fmt-err "[~a] Retrieve ~a~@[ for ~a~]~@[/~a~] ... "
+  (fmt-err "[~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
            (conf :strategy)
            (string-downcase section)
            (and concept (uri-resource concept))
