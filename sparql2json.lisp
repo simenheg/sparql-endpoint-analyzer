@@ -151,10 +151,7 @@
                      :key #'cdadar)))
 
 (defun query-to-uri-list (query)
-  (let ((values
-         (bindings-to-lists
-          (query-to-bindings (conf :endpoint) query))))
-    values))
+  (bindings-to-lists (query-to-bindings (conf :endpoint) query)))
 
 (defun split-uri (uri)
   "Split URI into stem and resource. The split is done at the last
@@ -205,8 +202,8 @@
 (defun extract-datatype-properties (concepts)
   (let ((datatype-properties '()))
     (dolist (c concepts)
-      (loop for (uri datatype) in (concept-literals c)
-            do (pushnew uri datatype-properties :test #'string=)))
+      (loop for l in (concept-literals c) do
+        (pushnew (literal-uri l) datatype-properties :test #'string=)))
     datatype-properties))
 
 (defun datatype-properties-to-json (concepts)
@@ -215,10 +212,10 @@
 (defun extract-object-properties (concepts)
   (let ((object-properties '()))
     (dolist (c concepts)
-      (loop for (uri target) in (concept-outgoing-links c)
-            do (pushnew uri object-properties :test #'string=))
-      (loop for (uri target) in (concept-incoming-links c)
-            do (pushnew uri object-properties :test #'string=)))
+      (loop for ol in (concept-outgoing-links c)
+            do (pushnew (link-uri ol) object-properties :test #'string=))
+      (loop for il in (concept-incoming-links c)
+            do (pushnew (link-uri il) object-properties :test #'string=)))
     object-properties))
 
 (defun object-properties-to-json (concepts)
@@ -233,13 +230,12 @@
   (subseq uri (+ (position #\# uri) 1) (length uri)))
 
 (defun literal-to-plist (literal)
-  (let* ((property-uri (first literal))
-         (datatype-uri (second literal))
-         (datatype (and datatype-uri (uri-to-datatype datatype-uri)))
-         (min-range (third literal))
-         (max-range (fourth literal)))
+  (let* ((datatype-uri (literal-type literal))
+         (datatype (and datatype-uri (uri-resource datatype-uri)))
+         (range-min (literal-range-min literal))
+         (range-max (literal-range-max literal)))
     (append
-     (list :|propId| (resource-to-id property-uri))
+     (list :|propId| (resource-to-id (literal-uri literal)))
      (and
       datatype-uri
       (list :|dataType| datatype))
@@ -319,31 +315,41 @@
      "SELECT DISTINCT ?concept WHERE { ?obj a ?concept . }")
     (:literals
      (fmt
-      "SELECT ~a ?prop (DATATYPE(?targetObj) AS ?type) WHERE {
+      "SELECT DISTINCT ?prop WHERE {
          ?obj a <~a> .
          ?obj ?prop ?targetObj .
        FILTER (isLiteral(?targetObj)) } ~a"
-      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
       concept
       (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))
     (:outgoing-links
      (fmt
-      "SELECT ~a ?prop ?targetType WHERE {
+      "SELECT DISTINCT ?prop WHERE {
          ?obj a <~a> .
          ?obj ?prop ?targetObj .
          ?targetObj a ?targetType . } ~a"
-      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
       concept
       (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))
+    (:target-type
+     (fmt
+      "SELECT ?targetType WHERE {
+         ?obj a <~a> .
+         ?obj <~a> ?targetObj .
+         ?targetObj a ?targetType . } LIMIT 1"
+      concept property))
     (:incoming-links
      (fmt
-      "SELECT ~a ?prop ?sourceType WHERE {
+      "SELECT DISTINCT ?prop WHERE {
          ?obj a <~a> .
-         ?sourceObj ?prop ?obj . 
+         ?sourceObj ?prop ?obj .
          ?sourceObj a ?sourceType . } ~a"
-      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
       concept
       (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))
+    (:literal-type
+     (fmt
+      "SELECT (DATATYPE(?targetObj) as ?type) WHERE {
+         ?obj a <~a> .
+         ?obj <~a> ?targetObj . } LIMIT 1"
+      concept property))
     (:date-limits
      (fmt
       "SELECT (YEAR(MIN(?val)) AS ?minYear) (YEAR(MAX(?val)) AS ?maxYear)
@@ -351,10 +357,9 @@
          ?X0 a <~a> .
          ?X0 <~a> ?val . }"
       concept property))
-    (:integer-limits
+    (:numeric-limits
      (fmt
-      "SELECT (MIN(?val) AS ?min) (MAX(?val) AS ?max)
-       WHERE {
+      "SELECT (MIN(?val) AS ?min) (MAX(?val) AS ?max) WHERE {
          ?X0 a <~a> .
          ?X0 <~a> ?val . }"
       concept property))))
@@ -424,64 +429,99 @@
   "Return concept with URI from CONCEPT-LIST."
   (find uri concept-list :key #'concept-uri :test #'string=))
 
-(defun add-link (link-name uri concept link-type)
-  "Add a link (LINK-NAME URI) of LINK-TYPE to the CONCEPT's link-list."
-  (ecase link-type
-    (:incoming-links
-     (pushnew
-      (list link-name uri) (concept-incoming-links concept) :test #'equal))
-    (:outgoing-links
-     (pushnew
-      (list link-name uri) (concept-outgoing-links concept) :test #'equal))))
+;; ---------------------------------------------------------------- [ Links ]
+(defstruct link
+  (uri "" :type string)
+  (target-uri "" :type string))
 
-(defun add-links (concept link-type concept-list)
-  (let* ((mirror-link
-          (if (eq link-type :incoming-links) :outgoing-links :incoming-links))
-         (links (retrieve link-type (concept-uri concept))))
-    (loop for (link-name target-uri) in links do
-      (add-link link-name target-uri concept link-type)
-      (when-let ((target-concept (get-concept target-uri concept-list)))
-        (add-link
-         link-name (concept-uri concept) target-concept mirror-link)))))
+(defun add-outgoing-links (concept)
+  (let ((outgoing-links
+         (filter (retrieve :outgoing-links (concept-uri concept)))))
+    (setf (concept-outgoing-links concept)
+          (mapcar (lambda (ol) (make-link :uri (first ol)))
+                  outgoing-links))))
+
+(defun add-link-types (concept)
+  (dolist (link (concept-outgoing-links concept))
+    (when-let ((target-uri
+                (retrieve
+                 :target-type (concept-uri concept) (link-uri link))))
+      (setf (link-target-uri link) (first (first target-uri))))))
+
+(defun add-incoming-links (concept concept-list)
+  (dolist (link (concept-outgoing-links concept))
+    (when-let* ((target-uri (link-target-uri link))
+                (target-concept (get-concept target-uri concept-list)))
+      (push
+       (make-link :uri (link-uri link) :target-uri (concept-uri concept))
+       (concept-incoming-links target-concept)))))
+
+;; ------------------------------------------------------------- [ Literals ]
+(defstruct literal
+  (uri "" :type string)
+  type
+  range-min
+  range-max)
 
 (defun add-literals (concept)
-  (let ((literals (retrieve :literals (concept-uri concept))))
-    (setf (concept-literals concept) literals)))
+  (let ((literals (filter (retrieve :literals (concept-uri concept)))))
+    (setf (concept-literals concept)
+          (mapcar (lambda (l) (make-literal :uri (first l)))
+                  literals))))
+
+(defun add-literal-types (concept)
+  (dolist (literal (concept-literals concept))
+    (when-let ((type (retrieve :literal-type
+                               (concept-uri concept) (literal-uri literal))))
+      (setf (literal-type literal) (first (first type))))))
 
 (defun add-literal-limits (concept)
   (dolist (literal (concept-literals concept))
-    (let ((type (and (second literal) (uri-to-datatype (second literal)))))
-      (cond
-        ((equal type "date")
-         (appendf
-          (rest literal)
-          (first
-           (retrieve
-            :date-limits (concept-uri concept) (first literal)))))
-        ((equal type "integer")
-         (appendf
-          (rest literal)
-          (first
-           (retrieve
-            :integer-limits (concept-uri concept) (first literal)))))))))
+    (when-let*
+      ((type
+        (and (literal-type literal)
+             (uri-resource (literal-type literal))))
+       (type-section-keyword
+        (assoc-value
+         '(("date" . :date-limits)
+           ("integer" . :numeric-limits)
+           ("decimal" . :numeric-limits))
+         type :test #'equal))
+       (limits
+        (first
+         (retrieve
+          type-section-keyword
+          (concept-uri concept) (literal-uri literal)))))
+      (setf (literal-range-min literal)
+            (first limits))
+      (setf (literal-range-max literal)
+            (second limits)))))
 
 (defun slurp (config-file-path)
   (init-config config-file-path)
-  (let ((concepts
-         (mapcar (lambda (c) (make-concept :uri (first c)))
-                 (retrieve :concepts))))
-    (dolist (c concepts)
-      (add-links c :outgoing-links concepts)
-      (add-links c :incoming-links concepts)
-      (add-literals c)
-      (add-literal-limits c)) 
+  (handler-case
+      (let ((concepts
+             (mapcar (lambda (c) (make-concept :uri (first c)))
+                     (filter (retrieve :concepts)))))
+        (dolist (c concepts)
+          (add-outgoing-links c)
+          (add-link-types c)
+          (add-incoming-links c concepts)
+          (add-literals c)
+          (add-literal-types c)
+          (add-literal-limits c))
 
-    (print-json concepts :concepts)
-    (print-json concepts :object-properties)
-    (print-json concepts :outgoing-links)
-    (print-json concepts :incoming-links)
-    (print-json concepts :datatype-properties)
-    (print-json concepts :literals)))
+        (print-json concepts :concepts)
+        (print-json concepts :object-properties)
+        (print-json concepts :outgoing-links)
+        (print-json concepts :incoming-links)
+        (print-json concepts :datatype-properties)
+        (print-json concepts :literals))
+    (usocket:timeout-error ()
+      (fmt-err "~%Endpoint not responding.~%"))
+    (unknown-content-type (err)
+      (fmt-err "~%Unknown content type from endpoint: ~a.~%"
+               (content-type err)))))
 
 (defun main (&aux (args sb-ext:*posix-argv*))
   (if (find "compile" args :test #'string=)
