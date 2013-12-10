@@ -222,12 +222,8 @@
   (uri-list-to-json (extract-object-properties concepts)))
 
 (defun link-to-plist (link)
-  (destructuring-bind (link-name target-type) link
-    (list :|propId| (resource-to-id link-name)
-          :|target| (resource-to-id target-type))))
-
-(defun uri-to-datatype (uri)
-  (subseq uri (+ (position #\# uri) 1) (length uri)))
+  (list :|propId| (resource-to-id (link-uri link))
+        :|target| (resource-to-id (link-target-uri link))))
 
 (defun literal-to-plist (literal)
   (let* ((datatype-uri (literal-type literal))
