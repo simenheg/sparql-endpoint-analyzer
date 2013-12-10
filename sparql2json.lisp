@@ -236,16 +236,16 @@
       datatype-uri
       (list :|dataType| datatype))
      (and
-      min-range max-range
+      range-min range-max
       (cond
         ((equal datatype "date")
          (list
-          :|minYear| (parse-integer min-range)
-          :|maxYear| (parse-integer max-range)))
-        ((equal datatype "integer")
+          :|minYear| (read-from-string range-min)
+          :|maxYear| (read-from-string range-max)))
+        ((or (equal datatype "integer") (equal datatype "decimal"))
          (list
-          :|min| (parse-integer min-range)
-          :|max| (parse-integer max-range))))))))
+          :|min| (read-from-string range-min)
+          :|max| (read-from-string range-max))))))))
 
 (defun outgoing-links-to-json (concepts)
   (let ((link-list
