@@ -493,6 +493,7 @@
         (assoc-value
          '(("date" . :date-limits)
            ("integer" . :numeric-limits)
+           ("int" . :numeric-limits)
            ("decimal" . :numeric-limits))
          type :test #'equal))
        (limits
