@@ -478,7 +478,7 @@
 ;; ------------------------------------------------------------- [ Literals ]
 (defstruct literal
   (uri "" :type string)
-  type
+  (type "http://www.w3.org/2001/XMLSchema#string" :type string)
   range-min
   range-max)
 
