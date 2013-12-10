@@ -16,7 +16,8 @@
   (ql:quickload :cl-json)
   (ql:quickload :cl-who)
   (ql:quickload :alexandria)
-  (ql:quickload :cl-ppcre))
+  (ql:quickload :cl-ppcre)
+  (ql:quickload :xmls))
 
 (load "util.lisp")
 (load "config.lisp")
@@ -88,6 +89,8 @@
 
 ;; --------------------------------------------------------------- [ SPARQL ]
 (define-condition sparql-transaction-time-out (error) ())
+(define-condition unknown-content-type (error)
+  ((content-type :initarg :content-type :reader content-type)))
 
 (defstruct concept
   (uri "" :type string)
@@ -97,41 +100,49 @@
 
 (defun sparql-query (endpoint query)
   "Send QUERY to ENDPOINT; return result as string."
-  (let* ((mode (if (search "CONSTRUCT" query) 'CONSTRUCT 'SELECT))
-         (url (format nil "~a?query=~a&output=~a"
-                      endpoint
-                      (drakma:url-encode query :utf-8)
-                      (if (eq mode 'CONSTRUCT) "ttl" "json")))
-         (res (drakma:http-request url :preserve-uri t)))
-    (when (search "timed out" res)
-      (error 'sparql-transaction-time-out))
-    (if (stringp res)
-        (list 'text res)
-        (list 'json (flexi-streams:octets-to-string
-                     res
-                     :external-format :utf-8)))))
+  (let ((url (fmt "~a?query=~a&output=~a"
+                  endpoint (drakma:url-encode query :utf-8) "json")))
+    (multiple-value-bind (res status headers)
+        (drakma:http-request url :preserve-uri t)
+      (declare (ignore status))
+      (when (search "timed out" res :test #'equal)
+        (error 'sparql-transaction-time-out))
+      (values
+       (if (stringp res)
+           res
+           (flexi-streams:octets-to-string res :external-format :utf-8))
+       (assoc-value headers :content-type)))))
+
+(defun xml-bindings-to-list (bindings)
+  (mapcar
+   (lambda (binding)
+     (let ((name (car (cdaadr binding)))
+           (type (car (caaddr binding)))
+           (value (cadr (cdaddr binding))))
+       (list (string-to-keyword name)
+             (cons :type type)
+             (cons :value value))))
+   (cddr bindings)))
+
+(defun parse-sparql-response (raw-results content-type)
+  (cond
+    ((search "json" content-type :test #'equal) ; JSON format
+     (let ((parsed (with-input-from-string (s raw-results)
+                     (json:decode-json s))))
+       (assoc-value (rest (find :results parsed :key #'first)) :bindings)))
+    ((search "xml" content-type :test #'equal) ; XML format
+     (let ((parsed (xmls:parse raw-results)))
+       (mapcar
+        #'xml-bindings-to-list
+        (cddr (find "results" (cddr parsed) :key #'caar :test #'equal)))))
+    (t (error 'unknown-content-type :content-type content-type))))
 
 (defun query-to-bindings (endpoint query)
-  (destructuring-bind (format data)
-      (sparql-query endpoint (strcat (conf :prefixes) query))
-    (if (eq format 'text)
-        (cl-who:escape-string data)
-        (let* ((json-results
-                (with-input-from-string (s data) (json:decode-json s)))
-               (results (find :results json-results :key #'first))
-               (bindings (assoc :bindings (rest results))))
-          (rest bindings)))))
+  (multiple-value-call #'parse-sparql-response
+    (sparql-query endpoint (strcat (conf :prefixes) query))))
 
 (defun binding-to-uri (binding)
-  (let ((type (cdadr binding)))
-    (cond 
-      ((string= type "uri")
-       (cdaddr binding))
-      ((string= type "typed-literal")
-       (cdr (cadddr binding)))
-      ((string= type "literal")
-       (cdaddr binding))
-      (t nil))))
+  (assoc-value (rest binding) :value))
 
 (defun bindings-to-lists (bindings)
   (mapcar (lambda (b) (mapcar #'binding-to-uri b))
