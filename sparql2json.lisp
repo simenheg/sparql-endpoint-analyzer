@@ -307,11 +307,14 @@
   (cdr (find :value (rest entry) :key #'car)))
 
 ;; -------------------------------------------------------------- [ Slurper ]
-(defun make-query (section mode &key (limit 0) (offset 0) concept property)
+(defun make-query
+    (section mode &key (limit 0) (offset 0) concept property hard-limit)
   "MODE should be one of :quick, :full or :paged."
   (ecase section
     (:concepts
-     "SELECT DISTINCT ?concept WHERE { ?obj a ?concept . }")
+     (fmt
+      "SELECT DISTINCT ?concept WHERE { ?obj a ?concept . }~@[ LIMIT ~a~]"
+      hard-limit))
     (:literals
      (fmt
       "SELECT DISTINCT ?prop WHERE {
@@ -319,7 +322,9 @@
          ?obj ?prop ?targetObj .
        FILTER (isLiteral(?targetObj)) } ~a"
       concept
-      (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:outgoing-links
      (fmt
       "SELECT DISTINCT ?prop WHERE {
@@ -327,7 +332,9 @@
          ?obj ?prop ?targetObj .
          ?targetObj a ?targetType . } ~a"
       concept
-      (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:target-type
      (fmt
       "SELECT ?targetType WHERE {
@@ -342,7 +349,9 @@
          ?sourceObj ?prop ?obj .
          ?sourceObj a ?sourceType . } ~a"
       concept
-      (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:literal-type
      (fmt
       "SELECT (DATATYPE(?targetObj) as ?type) WHERE {
@@ -369,7 +378,9 @@
          ?obj <~a> ?propVal . } ~a"
       (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
       concept property
-      (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))))
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))))
 
 (defun repeated-retrieve (section limit page results
                           &key concept property page-limit)
@@ -417,7 +428,8 @@
                (string-to-keyword (conf :strategy))
                :offset 0
                :concept concept
-               :property property))
+               :property property
+               :hard-limit (conf :hard-limit)))
              (res (query-to-uri-list query))
              (n (length res)))
         (fmt-err "ok (got ~a)~%" n)
