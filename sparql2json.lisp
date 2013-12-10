@@ -11,19 +11,20 @@
         (load quicklisp-init-2))))
 
 (let ((*standard-output* *error-output*))
-  (ql:quickload :flexi-streams)
-  (ql:quickload :drakma)
-  (ql:quickload :cl-json)
-  (ql:quickload :cl-who)
   (ql:quickload :alexandria)
+  (ql:quickload :cl-json)
   (ql:quickload :cl-ppcre)
-  (ql:quickload :xmls))
+  (ql:quickload :cl-who)
+  (ql:quickload :drakma)
+  (ql:quickload :parse-number)
+  (ql:quickload :xmls)
+  (ql:quickload :flexi-streams))
 
 (load "util.lisp")
 (load "config.lisp")
 
 (defpackage :sparql2json
-  (:use :cl :util :alexandria :cl-ppcre :json)
+  (:use :cl :util :alexandria :cl-ppcre :json :parse-number)
   (:import-from :config :read-config-file))
 
 (in-package :sparql2json)
@@ -237,15 +238,18 @@
       (list :|dataType| datatype))
      (and
       range-min range-max
-      (cond
-        ((equal datatype "date")
-         (list
-          :|minYear| (read-from-string range-min)
-          :|maxYear| (read-from-string range-max)))
-        ((or (equal datatype "integer") (equal datatype "decimal"))
-         (list
-          :|min| (read-from-string range-min)
-          :|max| (read-from-string range-max))))))))
+      (handler-case
+          (cond
+            ((equal datatype "date")
+             (list
+              :|minYear| (parse-number range-min)
+              :|maxYear| (parse-number range-max)))
+            ((find datatype '("integer" "int" "decimal") :test #'equal)
+             (list
+              :|min| (parse-number range-min)
+              :|max| (parse-number range-max))))
+        (invalid-number ()
+          nil))))))
 
 (defun outgoing-links-to-json (concepts)
   (let ((link-list
