@@ -362,7 +362,15 @@
       "SELECT (MIN(?val) AS ?min) (MAX(?val) AS ?max) WHERE {
          ?X0 a <~a> .
          ?X0 <~a> ?val . }"
-      concept property))))
+      concept property))
+    (:property-values
+     (fmt
+      "SELECT ~a ?propVal WHERE {
+         ?obj a <~a> .
+         ?obj <~a> ?propVal . } ~a"
+      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
+      concept property
+      (if (eq mode :paged) (fmt "LIMIT ~a OFFSET ~a" limit offset) "")))))
 
 (defun repeated-retrieve (section limit page results
                           &key concept property page-limit)
