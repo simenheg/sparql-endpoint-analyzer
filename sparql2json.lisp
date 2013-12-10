@@ -38,7 +38,7 @@
 
 (defun init-prefix-map (prefixes)
   "Create a mapping from URIs to defined PREFIXES, and store it in *CONFIG*."
-  (let ((split (split :whitespace-char-class prefixes))
+  (let ((split (split "\\s+" prefixes))
         (prefix-map (make-hash-table :test 'equal)))
     (loop for (_ prefix uri) on split by #'cdddr do
       (let ((prefix-stem (string-trim ":" prefix))
