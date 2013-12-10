@@ -248,8 +248,7 @@
              (list
               :|min| (parse-number range-min)
               :|max| (parse-number range-max))))
-        (invalid-number ()
-          nil))))))
+        (parse-error ()))))))
 
 (defun outgoing-links-to-json (concepts)
   (let ((link-list
