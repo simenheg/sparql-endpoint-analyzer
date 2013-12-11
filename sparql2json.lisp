@@ -240,7 +240,7 @@
       range-min range-max
       (handler-case
           (cond
-            ((equal datatype "date")
+            ((find datatype '("date" "dateTime") :test #'equal)
              (list
               :|minYear| (parse-number range-min)
               :|maxYear| (parse-number range-max)))
@@ -503,6 +503,7 @@
        (type-section-keyword
         (assoc-value
          '(("date" . :date-limits)
+           ("dateTime" . :date-limits)
            ("integer" . :numeric-limits)
            ("int" . :numeric-limits)
            ("decimal" . :numeric-limits))
