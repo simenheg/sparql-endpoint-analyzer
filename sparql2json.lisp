@@ -490,9 +490,9 @@
 
 (defun add-literal-types (concept)
   (dolist (literal (concept-literals concept))
-    (when-let ((type (retrieve :literal-type
-                               (concept-uri concept) (literal-uri literal))))
-      (setf (literal-type literal) (first (first type))))))
+    (when-let ((type (first (retrieve :literal-type (concept-uri concept)
+                                      (literal-uri literal)))))
+      (setf (literal-type literal) (first type)))))
 
 (defun add-literal-limits (concept)
   (dolist (literal (concept-literals concept))
