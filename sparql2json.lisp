@@ -93,7 +93,10 @@
   (let ((url (fmt "~a?query=~a&output=~a"
                   endpoint (drakma:url-encode query :utf-8) "json")))
     (multiple-value-bind (res status headers)
-        (drakma:http-request url :preserve-uri t)
+        (drakma:http-request
+         url
+         :preserve-uri t
+         :accept "application/json, application/sparql-results+json, application/xml,application/sparql-results+xml")
       (declare (ignore status))
       (when (search "timed out" res :test #'equal)
         (error 'sparql-transaction-time-out))
