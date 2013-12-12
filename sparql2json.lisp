@@ -381,6 +381,8 @@
      (fmt "{~%~{~a: ~a~^,~%~}~%}" (mapcar #'to-json obj)))
     ((listp obj)
      (fmt "[~@[~%~{~a~^, ~}~%~]]" (mapcar #'to-json obj)))
+    ((eq obj t)
+     "true")
     ((or (stringp obj) (keywordp obj) (symbolp obj))
      (fmt "\"~a\"" obj))
     (t obj)))
@@ -439,6 +441,7 @@
          (range-max (literal-range-max literal)))
     (append
      (list :|propId| (resource-to-id (literal-uri literal)))
+     (list :|searchable| t)
      (and
       datatype-uri
       (list :|dataType| datatype))
@@ -478,7 +481,7 @@
   (let ((literal-list
          (loop for c in concepts
                when (concept-literals c) collect
-           (list :|typeId|
+           (list :|propId|
                  (resource-to-id (concept-uri c))
                  :|literalValues|
                  (mapcar #'literal-to-plist (concept-literals c))))))
