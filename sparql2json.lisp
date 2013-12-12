@@ -397,7 +397,7 @@
 (defun uri-to-plist (concept-uri)
   (list :|id| (resource-to-id concept-uri)
         :|uri| concept-uri
-        :|label| (nth-value 1 (split-uri concept-uri))))
+        :|label| (list :|en| (nth-value 1 (split-uri concept-uri)))))
 
 (defun uri-list-to-json (uri-list)
   (let ((resources '()))
