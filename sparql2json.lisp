@@ -447,17 +447,13 @@
       (list :|dataType| datatype))
      (and
       range-min range-max
-      (handler-case
-          (cond
-            ((find datatype '("date" "dateTime") :test #'equal)
-             (list
-              :|minYear| (parse-number range-min)
-              :|maxYear| (parse-number range-max)))
-            ((find datatype '("integer" "int" "decimal") :test #'equal)
-             (list
-              :|min| (parse-number range-min)
-              :|max| (parse-number range-max))))
-        (parse-error ()))))))
+      (when (find datatype '("date" "dateTime" "integer" "int" "decimal")
+                  :test #'equal)
+        (handler-case
+            (list
+             :|min| (parse-number range-min)
+             :|max| (parse-number range-max))
+          (parse-error ())))))))
 
 (defun outgoing-links-to-json (concepts)
   (let ((link-list
