@@ -217,7 +217,7 @@
          ?obj a <~a> .
          ?obj <~a> ?targetObj . } LIMIT 1"
       concept property))
-    (:date-limits
+    (:year-limits
      (fmt
       "SELECT (YEAR(MIN(?val)) AS ?minYear) (YEAR(MAX(?val)) AS ?maxYear)
        WHERE {
@@ -347,6 +347,21 @@
   (setf (concept-subclasses concept)
         (mapcar #'first (retrieve :subclasses (concept-uri concept)))))
 
+;; ------------------------------------------------------------ [ XSD types ]
+(defparameter *xsd-numeric-types*
+  '("byte" "decimal" "double" "float" "int" "integer" "long"
+    "negativeInteger" "nonNegativeInteger" "nonPositiveInteger"
+    "positiveInteger" "short" "unsignedInt" "unsignedLong" "unsignedShort"))
+
+(defparameter *xsd-year-types*
+  '("date" "dateTime" "gYear" "gYearMonth"))
+
+(defun xsd-numeric-p (type)
+  (find type *xsd-numeric-types* :test #'equal))
+
+(defun xsd-year-p (type)
+  (find type *xsd-year-types* :test #'equal))
+
 ;; ------------------------------------------------------------- [ Literals ]
 (defstruct literal
   (uri "" :type string)
@@ -373,14 +388,9 @@
         (and (literal-type literal)
              (uri-resource (literal-type literal))))
        (type-section-keyword
-        (assoc-value
-         '(("date" . :date-limits)
-           ("dateTime" . :date-limits)
-           ("integer" . :numeric-limits)
-           ("int" . :numeric-limits)
-           ("decimal" . :numeric-limits)
-           ("float" . :numeric-limits))
-         type :test #'equal))
+        (cond
+          ((xsd-numeric-p type) :numeric-limits)
+          ((xsd-year-p type) :year-limits)))
        (limits
         (first
          (retrieve
@@ -457,10 +467,8 @@
          (datatype (and datatype-uri (uri-resource datatype-uri)))
          (range-min (literal-range-min literal))
          (range-max (literal-range-max literal))
-         (numeric
-          (find
-           datatype '("date" "dateTime" "integer" "int" "decimal" "float")
-           :test #'equal)))
+         (numeric (or (xsd-numeric-p datatype)
+                      (xsd-year-p datatype))))
     (append
      (list :|propId| (resource-to-id (literal-uri literal)))
      (list :|searchable| t)
