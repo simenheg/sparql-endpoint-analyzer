@@ -4,6 +4,8 @@
    :*whitespace*
    :fmt
    :fmt-err
+   :looks-like-plist-p
+   :looks-like-uri-p
    :spaces
    :strcat
    :string-prefix-p
@@ -21,6 +23,15 @@
 (defun fmt-err (&rest args)
   "Print format string ARGS to standard error output."
   (apply #'format *error-output* args))
+
+(defun looks-like-plist-p (list)
+  "Return T if LIST looks like a plist (first element is a keyword)."
+  (and (listp list) (keywordp (first list))))
+
+(defun looks-like-uri-p (string)
+  "Return T if STRING looks like an URI."
+  (and (>= (length string) 4)
+       (string= (subseq string 0 4) "http")))
 
 (defun spaces (amount)
   "Return a string of AMOUNT spaces."

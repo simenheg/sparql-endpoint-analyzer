@@ -62,17 +62,12 @@
       (sb-ext:exit)))
   (init-prefix-map (conf :prefixes)))
 
-(defun uri-p (string)
-  "Return T if STRING looks like an URI."
-  (and (>= (length string) 4)
-       (string= (subseq string 0 4) "http")))
-
 (defun filter-whitelist (values)
   "Return copy of VALUES where every value has a prefix from the whitelist."
   (when-let ((prefixes (split #\Newline (conf :uri-whitelist))))
     (setf values
           (remove-if-not
-           (lambda (v) (or (not (uri-p v))
+           (lambda (v) (or (not (looks-like-uri-p v))
                       (some (lambda (p) (string-prefix-p p v)) prefixes)))
            values :key #'first)))
   values)
@@ -92,12 +87,6 @@
 (define-condition sparql-transaction-time-out (error) ())
 (define-condition unknown-content-type (error)
   ((content-type :initarg :content-type :reader content-type)))
-
-(defstruct concept
-  (uri "" :type string)
-  (outgoing-links '() :type list)
-  (incoming-links '() :type list)
-  (literals '() :type list))
 
 (defun sparql-query (endpoint query)
   "Send QUERY to ENDPOINT; return result as string."
@@ -164,10 +153,227 @@
   "Return the resource from a URI."
   (nth-value 1 (split-uri uri)))
 
-(defun looks-like-plist-p (list)
-  "Return T if LIST looks like a plist (first element is a keyword)."
-  (and (listp list) (keywordp (first list))))
+;; --------------------------------------------------- [ Query construction ]
+(defun make-query
+    (section mode &key (limit 0) (offset 0) concept property hard-limit)
+  "MODE should be one of :quick, :full or :paged."
+  (ecase section
+    (:concepts
+     (fmt
+      "SELECT DISTINCT ?concept WHERE { ?obj a ?concept . }~@[ LIMIT ~a~]"
+      hard-limit))
+    (:literals
+     (fmt
+      "SELECT DISTINCT ?prop WHERE {
+         ?obj a <~a> .
+         ?obj ?prop ?targetObj .
+       FILTER (isLiteral(?targetObj)) } ~a"
+      concept
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
+    (:outgoing-links
+     (fmt
+      "SELECT DISTINCT ?prop WHERE {
+         ?obj a <~a> .
+         ?obj ?prop ?targetObj .
+         ?targetObj a ?targetType . } ~a"
+      concept
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
+    (:target-type
+     (fmt
+      "SELECT ?targetType WHERE {
+         ?obj a <~a> .
+         ?obj <~a> ?targetObj .
+         ?targetObj a ?targetType . } LIMIT 1"
+      concept property))
+    (:incoming-links
+     (fmt
+      "SELECT DISTINCT ?prop WHERE {
+         ?obj a <~a> .
+         ?sourceObj ?prop ?obj .
+         ?sourceObj a ?sourceType . } ~a"
+      concept
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
+    (:literal-type
+     (fmt
+      "SELECT (DATATYPE(?targetObj) as ?type) WHERE {
+         ?obj a <~a> .
+         ?obj <~a> ?targetObj . } LIMIT 1"
+      concept property))
+    (:date-limits
+     (fmt
+      "SELECT (YEAR(MIN(?val)) AS ?minYear) (YEAR(MAX(?val)) AS ?maxYear)
+       WHERE {
+         ?X0 a <~a> .
+         ?X0 <~a> ?val . }"
+      concept property))
+    (:numeric-limits
+     (fmt
+      "SELECT (MIN(?val) AS ?min) (MAX(?val) AS ?max) WHERE {
+         ?X0 a <~a> .
+         ?X0 <~a> ?val . }"
+      concept property))
+    (:property-values
+     (fmt
+      "SELECT ~a ?propVal WHERE {
+         ?obj a <~a> .
+         ?obj <~a> ?propVal . } ~a"
+      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
+      concept property
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))))
 
+;; ------------------------------------------------------------ [ Retrieval ]
+(defun repeated-retrieve (section limit page results
+                          &key concept property page-limit)
+  (fmt-err "[page ~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
+           (+ page 1)
+           (string-downcase section)
+           (and concept (uri-resource concept))
+           (and property (uri-resource property)))
+  (let ((offset (* limit page)))
+    (handler-case
+        (let* ((query
+                (make-query
+                 section :paged
+                 :limit limit
+                 :offset offset
+                 :concept concept
+                 :property property))
+               (res (query-to-uri-list query))
+               (n (length res)))
+          (setf results (append res results))
+          (fmt-err "ok (got ~a)~%" n)
+          (if (or (/= n limit) (= (+ page 1) page-limit))
+              results
+              (repeated-retrieve
+               section limit (+ page 1) results
+               :concept concept :property property :page-limit page-limit)))
+      (sparql-transaction-time-out ()
+        (fmt-err "timeout~%")
+        (fmt-err "Retrying in 20 seconds ")
+        (sleep 20)
+        (repeated-retrieve
+         section limit page results
+         :concept concept :property property :page-limit page-limit)))))
+
+(defun retrieve (section &optional concept property)
+  (fmt-err "[~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
+           (conf :strategy)
+           (string-downcase section)
+           (and concept (uri-resource concept))
+           (and property (uri-resource property)))
+  (handler-case
+      (let* ((query
+              (make-query
+               section
+               (string-to-keyword (conf :strategy))
+               :offset 0
+               :concept concept
+               :property property
+               :hard-limit (conf :hard-limit)))
+             (res (query-to-uri-list query))
+             (n (length res)))
+        (fmt-err "ok (got ~a)~%" n)
+        (remove-duplicates res :test #'equal :key #'first))
+    (sparql-transaction-time-out ()
+      (fmt-err "timeout~%")
+      (fmt-err "Going for paged retrieval ... this may take some time ...~%")
+      (repeated-retrieve
+       section (parse-integer (conf :results-per-page-limit)) 0 '()
+       :concept concept
+       :property property
+       :page-limit (let ((page-limit (parse-integer (conf :page-limit))))
+                     (and (/= page-limit 0) page-limit))))))
+
+;; ------------------------------------------------------------- [ Concepts ]
+(defstruct concept
+  (uri "" :type string)
+  (outgoing-links '() :type list)
+  (incoming-links '() :type list)
+  (literals '() :type list))
+
+(defun get-concept (uri concept-list)
+  "Return concept with URI from CONCEPT-LIST."
+  (find uri concept-list :key #'concept-uri :test #'string=))
+
+;; ---------------------------------------------------------------- [ Links ]
+(defstruct link
+  (uri "" :type string)
+  (target-uri "" :type string))
+
+(defun add-outgoing-links (concept)
+  (let ((outgoing-links
+         (filter (retrieve :outgoing-links (concept-uri concept)))))
+    (setf (concept-outgoing-links concept)
+          (mapcar (lambda (ol) (make-link :uri (first ol)))
+                  outgoing-links))))
+
+(defun add-link-types (concept)
+  (dolist (link (concept-outgoing-links concept))
+    (when-let ((target-uri
+                (retrieve
+                 :target-type (concept-uri concept) (link-uri link))))
+      (setf (link-target-uri link) (first (first target-uri))))))
+
+(defun add-incoming-links (concept concept-list)
+  (dolist (link (concept-outgoing-links concept))
+    (when-let* ((target-uri (link-target-uri link))
+                (target-concept (get-concept target-uri concept-list)))
+      (push
+       (make-link :uri (link-uri link) :target-uri (concept-uri concept))
+       (concept-incoming-links target-concept)))))
+
+;; ------------------------------------------------------------- [ Literals ]
+(defstruct literal
+  (uri "" :type string)
+  (type "http://www.w3.org/2001/XMLSchema#string" :type string)
+  range-min
+  range-max)
+
+(defun add-literals (concept)
+  (let ((literals (filter (retrieve :literals (concept-uri concept)))))
+    (setf (concept-literals concept)
+          (mapcar (lambda (l) (make-literal :uri (first l)))
+                  literals))))
+
+(defun add-literal-types (concept)
+  (dolist (literal (concept-literals concept))
+    (when-let ((type (first (retrieve :literal-type (concept-uri concept)
+                                      (literal-uri literal)))))
+      (setf (literal-type literal) (first type)))))
+
+(defun add-literal-limits (concept)
+  (dolist (literal (concept-literals concept))
+    (when-let*
+      ((type
+        (and (literal-type literal)
+             (uri-resource (literal-type literal))))
+       (type-section-keyword
+        (assoc-value
+         '(("date" . :date-limits)
+           ("dateTime" . :date-limits)
+           ("integer" . :numeric-limits)
+           ("int" . :numeric-limits)
+           ("decimal" . :numeric-limits))
+         type :test #'equal))
+       (limits
+        (first
+         (retrieve
+          type-section-keyword
+          (concept-uri concept) (literal-uri literal)))))
+      (setf (literal-range-min literal)
+            (first limits))
+      (setf (literal-range-max literal)
+            (second limits)))))
+
+;; --------------------------------------------------------------- [ Output ]
 (defun to-json (obj)
   "Return JSON-representation of lisp OBJ."
   (cond
@@ -296,228 +502,7 @@
     (when-let ((json (funcall json-printing-function concepts)))
       (format t "var json~a~a = ~a;~%" (conf :dataset-name) name json))))
 
-;; ---------------------------------------------- [ SPARQL-entry inspectors ]
-(defun sparql-entry-field (entry)
-  (string (first entry)))
-
-(defun sparql-entry-type (entry)
-  (cdr (find :type (rest entry) :key #'car)))
-
-(defun sparql-entry-value (entry)
-  (cdr (find :value (rest entry) :key #'car)))
-
 ;; -------------------------------------------------------------- [ Slurper ]
-(defun make-query
-    (section mode &key (limit 0) (offset 0) concept property hard-limit)
-  "MODE should be one of :quick, :full or :paged."
-  (ecase section
-    (:concepts
-     (fmt
-      "SELECT DISTINCT ?concept WHERE { ?obj a ?concept . }~@[ LIMIT ~a~]"
-      hard-limit))
-    (:literals
-     (fmt
-      "SELECT DISTINCT ?prop WHERE {
-         ?obj a <~a> .
-         ?obj ?prop ?targetObj .
-       FILTER (isLiteral(?targetObj)) } ~a"
-      concept
-      (if (eq mode :paged)
-          (fmt "LIMIT ~a OFFSET ~a" limit offset)
-          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
-    (:outgoing-links
-     (fmt
-      "SELECT DISTINCT ?prop WHERE {
-         ?obj a <~a> .
-         ?obj ?prop ?targetObj .
-         ?targetObj a ?targetType . } ~a"
-      concept
-      (if (eq mode :paged)
-          (fmt "LIMIT ~a OFFSET ~a" limit offset)
-          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
-    (:target-type
-     (fmt
-      "SELECT ?targetType WHERE {
-         ?obj a <~a> .
-         ?obj <~a> ?targetObj .
-         ?targetObj a ?targetType . } LIMIT 1"
-      concept property))
-    (:incoming-links
-     (fmt
-      "SELECT DISTINCT ?prop WHERE {
-         ?obj a <~a> .
-         ?sourceObj ?prop ?obj .
-         ?sourceObj a ?sourceType . } ~a"
-      concept
-      (if (eq mode :paged)
-          (fmt "LIMIT ~a OFFSET ~a" limit offset)
-          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
-    (:literal-type
-     (fmt
-      "SELECT (DATATYPE(?targetObj) as ?type) WHERE {
-         ?obj a <~a> .
-         ?obj <~a> ?targetObj . } LIMIT 1"
-      concept property))
-    (:date-limits
-     (fmt
-      "SELECT (YEAR(MIN(?val)) AS ?minYear) (YEAR(MAX(?val)) AS ?maxYear)
-       WHERE {
-         ?X0 a <~a> .
-         ?X0 <~a> ?val . }"
-      concept property))
-    (:numeric-limits
-     (fmt
-      "SELECT (MIN(?val) AS ?min) (MAX(?val) AS ?max) WHERE {
-         ?X0 a <~a> .
-         ?X0 <~a> ?val . }"
-      concept property))
-    (:property-values
-     (fmt
-      "SELECT ~a ?propVal WHERE {
-         ?obj a <~a> .
-         ?obj <~a> ?propVal . } ~a"
-      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
-      concept property
-      (if (eq mode :paged)
-          (fmt "LIMIT ~a OFFSET ~a" limit offset)
-          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))))
-
-(defun repeated-retrieve (section limit page results
-                          &key concept property page-limit)
-  (fmt-err "[page ~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
-           (+ page 1)
-           (string-downcase section)
-           (and concept (uri-resource concept))
-           (and property (uri-resource property)))
-  (let ((offset (* limit page)))
-    (handler-case
-        (let* ((query
-                (make-query
-                 section :paged
-                 :limit limit
-                 :offset offset
-                 :concept concept
-                 :property property))
-               (res (query-to-uri-list query))
-               (n (length res)))
-          (setf results (append res results))
-          (fmt-err "ok (got ~a)~%" n)
-          (if (or (/= n limit) (= (+ page 1) page-limit))
-              results
-              (repeated-retrieve
-               section limit (+ page 1) results
-               :concept concept :property property :page-limit page-limit)))
-      (sparql-transaction-time-out ()
-        (fmt-err "timeout~%")
-        (fmt-err "Retrying in 20 seconds ")
-        (sleep 20)
-        (repeated-retrieve
-         section limit page results
-         :concept concept :property property :page-limit page-limit)))))
-
-(defun retrieve (section &optional concept property)
-  (fmt-err "[~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
-           (conf :strategy)
-           (string-downcase section)
-           (and concept (uri-resource concept))
-           (and property (uri-resource property)))
-  (handler-case
-      (let* ((query
-              (make-query
-               section
-               (string-to-keyword (conf :strategy))
-               :offset 0
-               :concept concept
-               :property property
-               :hard-limit (conf :hard-limit)))
-             (res (query-to-uri-list query))
-             (n (length res)))
-        (fmt-err "ok (got ~a)~%" n)
-        (remove-duplicates res :test #'equal :key #'first))
-    (sparql-transaction-time-out ()
-      (fmt-err "timeout~%")
-      (fmt-err "Going for paged retrieval ... this may take some time ...~%")
-      (repeated-retrieve
-       section (parse-integer (conf :results-per-page-limit)) 0 '()
-       :concept concept
-       :property property
-       :page-limit (let ((page-limit (parse-integer (conf :page-limit))))
-                     (and (/= page-limit 0) page-limit))))))
-
-(defun get-concept (uri concept-list)
-  "Return concept with URI from CONCEPT-LIST."
-  (find uri concept-list :key #'concept-uri :test #'string=))
-
-;; ---------------------------------------------------------------- [ Links ]
-(defstruct link
-  (uri "" :type string)
-  (target-uri "" :type string))
-
-(defun add-outgoing-links (concept)
-  (let ((outgoing-links
-         (filter (retrieve :outgoing-links (concept-uri concept)))))
-    (setf (concept-outgoing-links concept)
-          (mapcar (lambda (ol) (make-link :uri (first ol)))
-                  outgoing-links))))
-
-(defun add-link-types (concept)
-  (dolist (link (concept-outgoing-links concept))
-    (when-let ((target-uri
-                (retrieve
-                 :target-type (concept-uri concept) (link-uri link))))
-      (setf (link-target-uri link) (first (first target-uri))))))
-
-(defun add-incoming-links (concept concept-list)
-  (dolist (link (concept-outgoing-links concept))
-    (when-let* ((target-uri (link-target-uri link))
-                (target-concept (get-concept target-uri concept-list)))
-      (push
-       (make-link :uri (link-uri link) :target-uri (concept-uri concept))
-       (concept-incoming-links target-concept)))))
-
-;; ------------------------------------------------------------- [ Literals ]
-(defstruct literal
-  (uri "" :type string)
-  (type "http://www.w3.org/2001/XMLSchema#string" :type string)
-  range-min
-  range-max)
-
-(defun add-literals (concept)
-  (let ((literals (filter (retrieve :literals (concept-uri concept)))))
-    (setf (concept-literals concept)
-          (mapcar (lambda (l) (make-literal :uri (first l)))
-                  literals))))
-
-(defun add-literal-types (concept)
-  (dolist (literal (concept-literals concept))
-    (when-let ((type (first (retrieve :literal-type (concept-uri concept)
-                                      (literal-uri literal)))))
-      (setf (literal-type literal) (first type)))))
-
-(defun add-literal-limits (concept)
-  (dolist (literal (concept-literals concept))
-    (when-let*
-      ((type
-        (and (literal-type literal)
-             (uri-resource (literal-type literal))))
-       (type-section-keyword
-        (assoc-value
-         '(("date" . :date-limits)
-           ("dateTime" . :date-limits)
-           ("integer" . :numeric-limits)
-           ("int" . :numeric-limits)
-           ("decimal" . :numeric-limits))
-         type :test #'equal))
-       (limits
-        (first
-         (retrieve
-          type-section-keyword
-          (concept-uri concept) (literal-uri literal)))))
-      (setf (literal-range-min literal)
-            (first limits))
-      (setf (literal-range-max literal)
-            (second limits)))))
-
 (defun slurp (config-file-path)
   (init-config config-file-path)
   (handler-case
