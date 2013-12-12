@@ -199,6 +199,14 @@
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
           (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
+    (:subclasses
+     (fmt
+      "SELECT DISTINCT ?subclass WHERE {
+         ?subclass rdfs:subClassOf <~a> . } ~a"
+      concept
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:literal-type
      (fmt
       "SELECT (DATATYPE(?targetObj) as ?type) WHERE {
@@ -297,6 +305,7 @@
   (uri "" :type string)
   (outgoing-links '() :type list)
   (incoming-links '() :type list)
+  (subclasses '() :type list)
   (literals '() :type list))
 
 (defun get-concept (uri concept-list)
@@ -329,6 +338,11 @@
       (push
        (make-link :uri (link-uri link) :target-uri (concept-uri concept))
        (concept-incoming-links target-concept)))))
+
+;; ----------------------------------------------------------- [ Subclasses ]
+(defun add-subclasses (concept)
+  (setf (concept-subclasses concept)
+        (mapcar #'first (retrieve :subclasses (concept-uri concept)))))
 
 ;; ------------------------------------------------------------- [ Literals ]
 (defstruct literal
@@ -475,6 +489,15 @@
                  (mapcar #'link-to-plist (concept-incoming-links c))))))
     (to-json link-list)))
 
+(defun subclasses-to-json (concepts)
+  (let ((subclass-list
+         (loop for c in concepts collect
+           (list :|typeId|
+                 (resource-to-id (concept-uri c))
+                 :|subclasses|
+                 (mapcar #'resource-to-id (concept-subclasses c))))))
+    (to-json subclass-list)))
+
 (defun literals-to-json (concepts)
   (let ((literal-list
          (loop for c in concepts
@@ -496,6 +519,8 @@
          (list #'outgoing-links-to-json "OutgoingLinks"))
         (:incoming-links
          (list #'incoming-links-to-json "IncomingLinks"))
+        (:subclasses
+         (list #'subclasses-to-json "SubclassRelations"))
         (:datatype-properties
          (list #'datatype-properties-to-json "DatatypeProperties"))
         (:literals
@@ -514,6 +539,7 @@
           (add-outgoing-links c)
           (add-link-types c)
           (add-incoming-links c concepts)
+          (add-subclasses c)
           (add-literals c)
           (add-literal-types c)
           (add-literal-limits c))
@@ -522,6 +548,7 @@
         (print-json concepts :object-properties)
         (print-json concepts :outgoing-links)
         (print-json concepts :incoming-links)
+        (print-json concepts :subclasses)
         (print-json concepts :datatype-properties)
         (print-json concepts :literals))
     (usocket:timeout-error ()
