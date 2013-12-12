@@ -156,7 +156,7 @@
 ;; --------------------------------------------------- [ Query construction ]
 (defun make-query
     (section mode &key (limit 0) (offset 0) concept property hard-limit)
-  "MODE should be one of :quick, :full or :paged."
+  "MODE should be one of :quick or :paged."
   (ecase section
     (:concepts
      (fmt
@@ -235,7 +235,7 @@
       "SELECT ~a ?propVal WHERE {
          ?obj a <~a> .
          ?obj <~a> ?propVal . } ~a"
-      (ecase mode (:quick "REDUCED") (:full "DISTINCT") (:paged ""))
+      (ecase mode (:quick "REDUCED") (:paged ""))
       concept property
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
@@ -284,7 +284,7 @@
       (let* ((query
               (make-query
                section
-               (string-to-keyword (conf :strategy))
+               :quick
                :offset 0
                :concept concept
                :property property
