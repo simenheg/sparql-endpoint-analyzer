@@ -361,7 +361,8 @@
            ("dateTime" . :date-limits)
            ("integer" . :numeric-limits)
            ("int" . :numeric-limits)
-           ("decimal" . :numeric-limits))
+           ("decimal" . :numeric-limits)
+           ("float" . :numeric-limits))
          type :test #'equal))
        (limits
         (first
@@ -440,8 +441,9 @@
          (range-min (literal-range-min literal))
          (range-max (literal-range-max literal))
          (numeric
-          (find datatype '("date" "dateTime" "integer" "int" "decimal")
-                :test #'equal)))
+          (find
+           datatype '("date" "dateTime" "integer" "int" "decimal" "float")
+           :test #'equal)))
     (append
      (list :|propId| (resource-to-id (literal-uri literal)))
      (list :|searchable| t)
