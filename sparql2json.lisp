@@ -164,20 +164,22 @@
       hard-limit))
     (:literals
      (fmt
-      "SELECT DISTINCT ?prop WHERE {
+      "SELECT ~a ?prop WHERE {
          ?obj a <~a> .
          ?obj ?prop ?targetObj .
        FILTER (isLiteral(?targetObj)) } ~a"
+      (if (eq mode :paged) "REDUCED" "DISTINCT")
       concept
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
           (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:outgoing-links
      (fmt
-      "SELECT DISTINCT ?prop WHERE {
+      "SELECT ~a ?prop WHERE {
          ?obj a <~a> .
          ?obj ?prop ?targetObj .
          ?targetObj a ?targetType . } ~a"
+      (if (eq mode :paged) "REDUCED" "DISTINCT")
       concept
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
@@ -191,18 +193,20 @@
       concept property))
     (:incoming-links
      (fmt
-      "SELECT DISTINCT ?prop WHERE {
+      "SELECT ~a ?prop WHERE {
          ?obj a <~a> .
          ?sourceObj ?prop ?obj .
          ?sourceObj a ?sourceType . } ~a"
+      (if (eq mode :paged) "REDUCED" "DISTINCT")
       concept
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
           (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:subclasses
      (fmt
-      "SELECT DISTINCT ?subclass WHERE {
+      "SELECT ~a ?subclass WHERE {
          ?subclass rdfs:subClassOf <~a> . } ~a"
+      (if (eq mode :paged) "REDUCED" "DISTINCT")
       concept
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
@@ -259,21 +263,20 @@
           (setf results (append res results))
           (fmt-err "ok (got ~a)~%" n)
           (if (or (/= n limit) (= (+ page 1) page-limit))
-              results
+              (remove-duplicates results :test #'equal)
               (repeated-retrieve
                section limit (+ page 1) results
                :concept concept :property property :page-limit page-limit)))
       (sparql-transaction-time-out ()
         (fmt-err "timeout~%")
-        (fmt-err "Retrying in 20 seconds ")
+        (fmt-err "[status] Retrying in 20 seconds ...~%")
         (sleep 20)
         (repeated-retrieve
          section limit page results
          :concept concept :property property :page-limit page-limit)))))
 
 (defun retrieve (section &optional concept property)
-  (fmt-err "[~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
-           (conf :strategy)
+  (fmt-err "[quick] Get ~a~@[ for ~a~]~@[/~a~] ... "
            (string-downcase section)
            (and concept (uri-resource concept))
            (and property (uri-resource property)))
@@ -292,7 +295,7 @@
         (remove-duplicates res :test #'equal :key #'first))
     (sparql-transaction-time-out ()
       (fmt-err "timeout~%")
-      (fmt-err "Going for paged retrieval ... this may take some time ...~%")
+      (fmt-err "[status] Going for paged retrieval ... ~%")
       (repeated-retrieve
        section (parse-integer (conf :results-per-page-limit)) 0 '()
        :concept concept
