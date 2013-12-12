@@ -438,22 +438,22 @@
   (let* ((datatype-uri (literal-type literal))
          (datatype (and datatype-uri (uri-resource datatype-uri)))
          (range-min (literal-range-min literal))
-         (range-max (literal-range-max literal)))
+         (range-max (literal-range-max literal))
+         (numeric
+          (find datatype '("date" "dateTime" "integer" "int" "decimal")
+                :test #'equal)))
     (append
      (list :|propId| (resource-to-id (literal-uri literal)))
      (list :|searchable| t)
+     (list :|dataType| datatype)
+     (list :|uiType| (if numeric "range" "string"))
      (and
-      datatype-uri
-      (list :|dataType| datatype))
-     (and
-      range-min range-max
-      (when (find datatype '("date" "dateTime" "integer" "int" "decimal")
-                  :test #'equal)
-        (handler-case
-            (list
-             :|min| (parse-number range-min)
-             :|max| (parse-number range-max))
-          (parse-error ())))))))
+      numeric range-min range-max
+      (handler-case
+          (list
+           :|min| (parse-number range-min)
+           :|max| (parse-number range-max))
+        (parse-error ()))))))
 
 (defun outgoing-links-to-json (concepts)
   (let ((link-list
