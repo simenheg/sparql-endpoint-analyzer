@@ -312,6 +312,7 @@
   (outgoing-links '() :type list)
   (incoming-links '() :type list)
   (subclasses '() :type list)
+  (primary 'true :type symbol)
   (literals '() :type list))
 
 (defun get-concept (uri concept-list)
@@ -346,9 +347,13 @@
        (concept-incoming-links target-concept)))))
 
 ;; ----------------------------------------------------------- [ Subclasses ]
-(defun add-subclasses (concept)
-  (setf (concept-subclasses concept)
-        (mapcar #'first (retrieve :subclasses (concept-uri concept)))))
+(defun add-subclasses (concept concept-list)
+  (let ((subclass-uris
+         (mapcar #'first (retrieve :subclasses (concept-uri concept)))))
+    (dolist (subclass-uri subclass-uris)
+      (when-let ((subclass-concept (get-concept subclass-uri concept-list)))
+        (setf (concept-primary subclass-concept) 'false)))
+    (setf (concept-subclasses concept) subclass-uris)))
 
 ;; ------------------------------------------------------------ [ XSD types ]
 (defparameter *xsd-numeric-types*
@@ -412,8 +417,10 @@
      (fmt "{~%~{~a: ~a~^,~%~}~%}" (mapcar #'to-json obj)))
     ((listp obj)
      (fmt "[~@[~%~{~a~^, ~}~%~]]" (mapcar #'to-json obj)))
-    ((eq obj t)
+    ((eq obj 'true)
      "true")
+    ((eq obj 'false)
+     "false")
     ((or (stringp obj) (keywordp obj) (symbolp obj))
      (fmt "\"~a\"" obj))
     (t obj)))
@@ -430,14 +437,13 @@
         :|uri| concept-uri
         :|label| (list :|en| (nth-value 1 (split-uri concept-uri)))))
 
-(defun uri-list-to-json (uri-list)
-  (let ((resources '()))
-    (dolist (uri uri-list)
-      (push (uri-to-plist uri) resources))
-    (to-json resources)))
-
 (defun concepts-to-json (concepts)
-  (uri-list-to-json (mapcar #'concept-uri concepts)))
+  (to-json
+   (mapcar
+    (lambda (concept)
+      (append (uri-to-plist (concept-uri concept))
+              (list :|primary| (concept-primary concept))))
+    concepts)))
 
 (defun extract-datatype-properties (concepts)
   (let ((datatype-properties '()))
@@ -447,7 +453,7 @@
     datatype-properties))
 
 (defun datatype-properties-to-json (concepts)
-  (uri-list-to-json (extract-datatype-properties concepts)))
+  (to-json (mapcar #'uri-to-plist (extract-datatype-properties concepts))))
 
 (defun extract-object-properties (concepts)
   (let ((object-properties '()))
@@ -459,7 +465,7 @@
     object-properties))
 
 (defun object-properties-to-json (concepts)
-  (uri-list-to-json (extract-object-properties concepts)))
+  (to-json (mapcar #'uri-to-plist (extract-object-properties concepts))))
 
 (defun link-to-plist (link)
   (list :|propId| (resource-to-id (link-uri link))
@@ -474,7 +480,7 @@
                       (xsd-year-p datatype))))
     (append
      (list :|propId| (resource-to-id (literal-uri literal)))
-     (list :|searchable| t)
+     (list :|searchable| 'true)
      (list :|dataType| datatype)
      (list :|uiType| (if numeric "range" "string"))
      (and
@@ -553,7 +559,7 @@
           (add-outgoing-links c)
           (add-link-types c)
           (add-incoming-links c concepts)
-          (add-subclasses c)
+          (add-subclasses c concepts)
           (add-literals c)
           (add-literal-types c)
           (add-literal-limits c))
