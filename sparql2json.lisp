@@ -30,7 +30,7 @@
 (in-package :sparql2json)
 
 ;; -------------------------------------------------------- [ Configuration ]
-(defparameter *config* nil
+(defvar *config* nil
   "Plist of global configurations, on the form (:SECTION VALUE).")
 
 (defun conf (section)
