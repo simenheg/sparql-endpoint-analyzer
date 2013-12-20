@@ -356,19 +356,19 @@
     (setf (concept-subclasses concept) subclass-uris)))
 
 ;; ------------------------------------------------------------ [ XSD types ]
-(defparameter *xsd-numeric-types*
+(defconstant +xsd-numeric-types+
   '("byte" "decimal" "double" "float" "int" "integer" "long"
     "negativeInteger" "nonNegativeInteger" "nonPositiveInteger"
     "positiveInteger" "short" "unsignedInt" "unsignedLong" "unsignedShort"))
 
-(defparameter *xsd-year-types*
+(defconstant +xsd-year-types+
   '("date" "dateTime" "gYear" "gYearMonth"))
 
 (defun xsd-numeric-p (type)
-  (find type *xsd-numeric-types* :test #'equal))
+  (find type +xsd-numeric-types+ :test #'equal))
 
 (defun xsd-year-p (type)
-  (find type *xsd-year-types* :test #'equal))
+  (find type +xsd-year-types+ :test #'equal))
 
 ;; ------------------------------------------------------------- [ Literals ]
 (defstruct literal

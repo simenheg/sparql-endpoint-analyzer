@@ -1,7 +1,7 @@
 (defpackage :util
   (:use :cl)
   (:export
-   :*whitespace*
+   :+whitespace+
    :fmt
    :fmt-err
    :looks-like-plist-p
@@ -14,7 +14,7 @@
 
 (in-package :util)
 
-(defvar *whitespace* '(#\Space #\Tab #\Newline))
+(defconstant +whitespace+ '(#\Space #\Tab #\Newline))
 
 (defun fmt (&rest args)
   "Return format string ARGS."
