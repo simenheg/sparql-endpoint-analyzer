@@ -546,7 +546,7 @@
         (:literals
          (list #'literals-to-json "LiteralValues")))
     (when-let ((json (funcall json-printing-function concepts)))
-      (format t "var json~a~a = ~a;~%" (conf :dataset-name) name json))))
+      (format t "var json~a = ~a;~%" name json))))
 
 ;; -------------------------------------------------------------- [ Slurper ]
 (defun slurp (config-file-path)
