@@ -522,7 +522,7 @@
   (let ((literal-list
          (loop for c in concepts
                when (concept-literals c) collect
-           (list :|propId|
+           (list :|typeId|
                  (resource-to-id (concept-uri c))
                  :|literalValues|
                  (mapcar #'literal-to-plist (concept-literals c))))))
