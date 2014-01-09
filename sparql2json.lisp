@@ -432,10 +432,24 @@
   (multiple-value-bind (stem id) (split-uri uri)
     (strcat (uri-guess-prefix stem) "_" id)))
 
+(defun prettify-label (label)
+  "Convert CamelCase and underscores in LABEL to spaces."
+  (unless (emptyp label)
+    (setq label (substitute #\Space #\_ label))
+    (coerce
+     (cons
+      (char label 0)
+      (loop for i from 1 below (length label)
+            for c = (char label i)
+            when (upper-case-p c) append (list #\Space (char-downcase c))
+            else collect c))
+     'string)))
+
 (defun uri-to-plist (concept-uri)
   (list :|id| (resource-to-id concept-uri)
         :|uri| concept-uri
-        :|label| (list :|en| (nth-value 1 (split-uri concept-uri)))))
+        :|label|
+        (list :|en| (prettify-label (nth-value 1 (split-uri concept-uri))))))
 
 (defun concepts-to-json (concepts)
   (to-json
