@@ -312,12 +312,27 @@
   (outgoing-links '() :type list)
   (incoming-links '() :type list)
   (subclasses '() :type list)
+  (display "rdf_label" :type string)
   (primary 'true :type symbol)
   (literals '() :type list))
 
 (defun get-concept (uri concept-list)
   "Return concept with URI from CONCEPT-LIST."
   (find uri concept-list :key #'concept-uri :test #'string=))
+
+(defun guess-concept-display-property (concept)
+  (dolist (l (concept-literals concept))
+    (let ((type (nth-value 1 (split-uri (literal-type l)))))
+      (when (equal type "string")
+        (return-from guess-concept-display-property
+          (literal-uri l)))))
+  (when (concept-literals concept)
+    (literal-uri (first (concept-literals concept)))))
+
+(defun set-concept-display-properties (concepts)
+  (dolist (c concepts)
+    (when-let ((guess (guess-concept-display-property c)))
+      (setf (concept-display c) (resource-to-id guess)))))
 
 ;; ---------------------------------------------------------------- [ Links ]
 (defstruct link
@@ -456,7 +471,9 @@
    (mapcar
     (lambda (concept)
       (append (uri-to-plist (concept-uri concept))
-              (list :|primary| (concept-primary concept))))
+              (list
+               :|display| (concept-display concept)
+               :|primary| (concept-primary concept))))
     concepts)))
 
 (defun extract-datatype-properties (concepts)
@@ -577,6 +594,8 @@
           (add-literals c)
           (add-literal-types c)
           (add-literal-limits c))
+
+        (set-concept-display-properties concepts)
 
         (print-json concepts :concepts)
         (print-json concepts :object-properties)
