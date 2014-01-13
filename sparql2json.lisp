@@ -377,6 +377,12 @@
            (lambda (subclass)
              (get-concept subclass concepts))
            (concept-subclasses c)))))
+
+(defun add-superclasses (concept concept-list)
+  (dolist (subclass (concept-subclasses concept))
+    (push concept
+          (concept-superclasses (get-concept subclass concept-list)))))
+
 ;; ------------------------------------------------------------ [ XSD types ]
 (defconstant +xsd-numeric-types+
   '("byte" "decimal" "double" "float" "int" "integer" "long"
@@ -552,6 +558,25 @@
                  :|subclasses|
                  (mapcar #'resource-to-id (concept-subclasses c))))))
     (to-json subclass-list)))
+  (to-json
+   (loop for c in concepts collect
+     (list
+      :|typeId| (resource-to-id (concept-uri c))
+      :|superclasses| (mapcar #'resource-to-id (concept-subclasses c))))))
+
+(defun superclasses-to-json (concepts)
+  (to-json
+   (loop for c in concepts collect
+     (list
+      :|typeId| (resource-to-id (concept-uri c))
+      :|subclasses| (mapcar #'resource-to-id (concept-superclasses c))))))
+
+(defun superclasses-to-json (concepts)
+  (to-json
+   (loop for c in concepts collect
+     (list
+      :|typeId| (resource-to-id (concept-uri c))
+      :|subclasses| (mapcar #'resource-to-id (concept-superclasses c))))))
 
 (defun literals-to-json (concepts)
   (let ((literal-list
@@ -576,6 +601,8 @@
          (list #'incoming-links-to-json "IncomingLinks"))
         (:subclasses
          (list #'subclasses-to-json "SubclassRelations"))
+        (:superclasses
+         (list #'superclasses-to-json "SuperclassRelations"))
         (:datatype-properties
          (list #'datatype-properties-to-json "DatatypeProperties"))
         (:literals
@@ -599,14 +626,17 @@
           (add-literal-types c)
           (add-literal-limits c))
 
-        (set-concept-display-properties concepts)
-        (remove-orphan-subclasses concepts)
+        (dolist (c concepts)
+          (set-concept-display-properties c)
+          (remove-orphan-subclasses c concepts)
+          (add-superclasses c concepts))
 
         (print-json concepts :concepts)
         (print-json concepts :object-properties)
         (print-json concepts :outgoing-links)
         (print-json concepts :incoming-links)
         (print-json concepts :subclasses)
+        (print-json concepts :superclasses)
         (print-json concepts :datatype-properties)
         (print-json concepts :literals))
     (usocket:timeout-error ()
