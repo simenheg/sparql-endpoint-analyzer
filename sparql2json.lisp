@@ -370,6 +370,13 @@
         (setf (concept-primary subclass-concept) 'false)))
     (setf (concept-subclasses concept) subclass-uris)))
 
+(defun remove-orphan-subclasses (concepts)
+  (dolist (c concepts)
+    (setf (concept-subclasses c)
+          (remove-if-not
+           (lambda (subclass)
+             (get-concept subclass concepts))
+           (concept-subclasses c)))))
 ;; ------------------------------------------------------------ [ XSD types ]
 (defconstant +xsd-numeric-types+
   '("byte" "decimal" "double" "float" "int" "integer" "long"
@@ -439,9 +446,6 @@
     ((or (stringp obj) (keywordp obj) (symbolp obj))
      (fmt "\"~a\"" obj))
     (t obj)))
-
-(defun resource-to-id (prefix resource)
-  (strcat prefix "_" resource))
 
 (defun resource-to-id (uri)
   (multiple-value-bind (stem id) (split-uri uri)
@@ -596,6 +600,7 @@
           (add-literal-limits c))
 
         (set-concept-display-properties concepts)
+        (remove-orphan-subclasses concepts)
 
         (print-json concepts :concepts)
         (print-json concepts :object-properties)
