@@ -312,6 +312,7 @@
   (outgoing-links '() :type list)
   (incoming-links '() :type list)
   (subclasses '() :type list)
+  (superclasses '() :type list)
   (display "rdf_label" :type string)
   (primary 'true :type symbol)
   (literals '() :type list))
@@ -380,7 +381,7 @@
 
 (defun add-superclasses (concept concept-list)
   (dolist (subclass (concept-subclasses concept))
-    (push concept
+    (push (concept-uri concept)
           (concept-superclasses (get-concept subclass concept-list)))))
 
 ;; ------------------------------------------------------------ [ XSD types ]
