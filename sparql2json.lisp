@@ -330,10 +330,9 @@
   (when (concept-literals concept)
     (literal-uri (first (concept-literals concept)))))
 
-(defun set-concept-display-properties (concepts)
-  (dolist (c concepts)
-    (when-let ((guess (guess-concept-display-property c)))
-      (setf (concept-display c) (resource-to-id guess)))))
+(defun set-concept-display-properties (concept)
+  (when-let ((guess (guess-concept-display-property concept)))
+    (setf (concept-display concept) (resource-to-id guess))))
 
 ;; ---------------------------------------------------------------- [ Links ]
 (defstruct link
@@ -371,13 +370,12 @@
         (setf (concept-primary subclass-concept) 'false)))
     (setf (concept-subclasses concept) subclass-uris)))
 
-(defun remove-orphan-subclasses (concepts)
-  (dolist (c concepts)
-    (setf (concept-subclasses c)
-          (remove-if-not
-           (lambda (subclass)
-             (get-concept subclass concepts))
-           (concept-subclasses c)))))
+(defun remove-orphan-subclasses (concept concept-list)
+  (setf (concept-subclasses concept)
+        (remove-if-not
+         (lambda (subclass)
+           (get-concept subclass concept-list))
+         (concept-subclasses concept))))
 
 (defun add-superclasses (concept concept-list)
   (dolist (subclass (concept-subclasses concept))
@@ -479,13 +477,12 @@
 
 (defun concepts-to-json (concepts)
   (to-json
-   (mapcar
-    (lambda (concept)
-      (append (uri-to-plist (concept-uri concept))
-              (list
-               :|display| (concept-display concept)
-               :|primary| (concept-primary concept))))
-    concepts)))
+   (loop for c in concepts collect
+     (append
+      (uri-to-plist (concept-uri c))
+      (list
+       :|display| (concept-display c)
+       :|primary| (concept-primary c))))))
 
 (defun extract-datatype-properties (concepts)
   (let ((datatype-properties '()))
@@ -534,60 +531,40 @@
         (parse-error ()))))))
 
 (defun outgoing-links-to-json (concepts)
-  (let ((link-list
-         (loop for c in concepts collect
-           (list :|typeId|
-                 (resource-to-id (concept-uri c))
-                 :|outgoingLinks|
-                 (mapcar #'link-to-plist (concept-outgoing-links c))))))
-    (to-json link-list)))
+  (to-json
+   (loop for c in concepts collect
+     (list
+      :|typeId| (resource-to-id (concept-uri c))
+      :|outgoingLinks| (mapcar #'link-to-plist (concept-outgoing-links c))))))
 
 (defun incoming-links-to-json (concepts)
-  (let ((link-list
-         (loop for c in concepts collect
-           (list :|typeId|
-                 (resource-to-id (concept-uri c))
-                 :|incomingLinks|
-                 (mapcar #'link-to-plist (concept-incoming-links c))))))
-    (to-json link-list)))
+  (to-json
+   (loop for c in concepts collect
+     (list
+      :|typeId| (resource-to-id (concept-uri c))
+      :|incomingLinks| (mapcar #'link-to-plist (concept-incoming-links c))))))
 
 (defun subclasses-to-json (concepts)
-  (let ((subclass-list
-         (loop for c in concepts collect
-           (list :|typeId|
-                 (resource-to-id (concept-uri c))
-                 :|subclasses|
-                 (mapcar #'resource-to-id (concept-subclasses c))))))
-    (to-json subclass-list)))
   (to-json
    (loop for c in concepts collect
      (list
       :|typeId| (resource-to-id (concept-uri c))
-      :|superclasses| (mapcar #'resource-to-id (concept-subclasses c))))))
+      :|subclasses| (mapcar #'resource-to-id (concept-subclasses c))))))
 
 (defun superclasses-to-json (concepts)
   (to-json
    (loop for c in concepts collect
      (list
       :|typeId| (resource-to-id (concept-uri c))
-      :|subclasses| (mapcar #'resource-to-id (concept-superclasses c))))))
-
-(defun superclasses-to-json (concepts)
-  (to-json
-   (loop for c in concepts collect
-     (list
-      :|typeId| (resource-to-id (concept-uri c))
-      :|subclasses| (mapcar #'resource-to-id (concept-superclasses c))))))
+      :|superclasses| (mapcar #'resource-to-id (concept-superclasses c))))))
 
 (defun literals-to-json (concepts)
-  (let ((literal-list
-         (loop for c in concepts
-               when (concept-literals c) collect
-           (list :|typeId|
-                 (resource-to-id (concept-uri c))
-                 :|literalValues|
-                 (mapcar #'literal-to-plist (concept-literals c))))))
-    (to-json literal-list)))
+  (to-json
+   (loop for c in concepts
+         when (concept-literals c) collect
+     (list
+      :|typeId| (resource-to-id (concept-uri c))
+      :|literalValues| (mapcar #'literal-to-plist (concept-literals c))))))
 
 (defun print-json (concepts category)
   (destructuring-bind (json-printing-function name)
