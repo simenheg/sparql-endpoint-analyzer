@@ -457,17 +457,23 @@
     (strcat (uri-guess-prefix stem) "_" id)))
 
 (defun prettify-label (label)
-  "Convert CamelCase and underscores in LABEL to spaces."
+  "Return a pretty LABEL, removing underscores and fixing CamelCase."
   (unless (emptyp label)
     (setq label (substitute #\Space #\_ label))
-    (coerce
-     (cons
-      (char label 0)
-      (loop for i from 1 below (length label)
-            for c = (char label i)
-            when (upper-case-p c) append (list #\Space (char-downcase c))
-            else collect c))
-     'string)))
+
+    (let ((split-label
+           (split "(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])" label)))
+      ;; Above regex works like the following:
+      ;;  "lowercase"     => ("lowercase")
+      ;;  "CamelCase"     => ("Camel" "Case")
+      ;;  "CAPSThenCamel" => ("CAPS" "Then" "Camel")
+      (fmt
+       "~{~a~^ ~}"
+       (cons
+        (first split-label)
+        (mapcar
+         (lambda (w) (if (every #'upper-case-p w) w (string-downcase w)))
+         (rest split-label)))))))
 
 (defun uri-to-plist (concept-uri)
   (list :|id| (resource-to-id concept-uri)
