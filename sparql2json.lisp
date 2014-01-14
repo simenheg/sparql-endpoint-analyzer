@@ -560,8 +560,7 @@
 
 (defun literals-to-json (concepts)
   (to-json
-   (loop for c in concepts
-         when (concept-literals c) collect
+   (loop for c in concepts collect
      (list
       :|typeId| (resource-to-id (concept-uri c))
       :|literalValues| (mapcar #'literal-to-plist (concept-literals c))))))
