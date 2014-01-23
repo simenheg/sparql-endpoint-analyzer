@@ -70,11 +70,16 @@
     (sb-int:simple-file-error ()
       (fmt-err "ERROR: Configuration file '~a' not found.~%" file-path)
       (sb-ext:exit)))
-  (init-prefix-map (conf :prefixes)))
+  (init-prefix-map (conf :prefixes))
+  (setf (getf *config* :uri-whitelist)
+        (split #\Newline (conf :uri-whitelist)))
+  (setf (getf *config* :uri-blacklist)
+        (split #\Newline (conf :uri-blacklist)))
+  *config*)
 
 (defun filter-whitelist (values)
   "Return copy of VALUES where every value has a prefix from the whitelist."
-  (when-let ((prefixes (split #\Newline (conf :uri-whitelist))))
+  (when-let ((prefixes (conf :uri-whitelist)))
     (setf values
           (remove-if-not
            (lambda (v) (or (not (looks-like-uri-p v))
@@ -84,7 +89,7 @@
 
 (defun filter-blacklist (values)
   "Return copy of VALUES where no value has a prefix from the blacklist."
-  (loop for prefix in (split #\Newline (conf :uri-blacklist)) do
+  (loop for prefix in (conf :uri-blacklist) do
     (setf values
           (remove-if
            (lambda (v) (string-prefix-p prefix v)) values :key #'first)))
