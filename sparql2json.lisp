@@ -530,9 +530,13 @@
 (defun object-properties-to-json (concepts)
   (to-json (mapcar #'uri-to-plist (extract-object-properties concepts))))
 
-(defun link-to-plist (link)
+(defun outgoing-link-to-plist (link)
   (list :|propId| (resource-to-id (link-uri link))
         :|target| (resource-to-id (link-target-uri link))))
+
+(defun incoming-link-to-plist (link)
+  (list :|propId| (resource-to-id (link-uri link))
+        :|source| (resource-to-id (link-target-uri link))))
 
 (defun literal-to-plist (literal)
   (let* ((datatype-uri (literal-type literal))
@@ -558,15 +562,19 @@
   (to-json
    (loop for c in concepts collect
      (list
-      :|typeId| (resource-to-id (concept-uri c))
-      :|outgoingLinks| (mapcar #'link-to-plist (concept-outgoing-links c))))))
+      :|typeId|
+      (resource-to-id (concept-uri c))
+      :|outgoingLinks|
+      (mapcar #'outgoing-link-to-plist (concept-outgoing-links c))))))
 
 (defun incoming-links-to-json (concepts)
   (to-json
    (loop for c in concepts collect
      (list
-      :|typeId| (resource-to-id (concept-uri c))
-      :|incomingLinks| (mapcar #'link-to-plist (concept-incoming-links c))))))
+      :|typeId|
+      (resource-to-id (concept-uri c))
+      :|incomingLinks|
+      (mapcar #'incoming-link-to-plist (concept-incoming-links c))))))
 
 (defun subclasses-to-json (concepts)
   (to-json
