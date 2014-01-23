@@ -47,11 +47,21 @@
         (setf (gethash uri-stem prefix-map) prefix-stem)))
     (setf (getf *config* :prefix-map) prefix-map)))
 
+(defun valid-prefix-p (prefix)
+  "Return T if PREFIX can be used as a SPARQL prefix and as an ID in JS."
+  (and (> (length prefix) 0)
+       (every #'alpha-char-p prefix)
+       (not (find prefix (hash-table-values (conf :prefix-map))
+                  :test #'equal))))
+
 (defun uri-guess-prefix (uri)
   "Return a sensible prefix for URI."
-  (or (gethash uri (conf :prefix-map))
-      (let ((guess (first (last (split "/" uri)))))
-        (take 3 guess))))
+  (let ((stem (uri-stem uri)))
+    (or (gethash stem (conf :prefix-map))
+        (let* ((split (reverse (rest (rest (split "/" stem)))))
+               (candidates (mapcar (lambda (s) (take 3 s)) split)))
+          (find-if #'valid-prefix-p candidates))
+        "unk")))
 
 (defun init-config (file-path)
   "Initialize *CONFIG* based on config file found at FILE-PATH."
@@ -152,8 +162,12 @@
   (when-let ((pos (position-if (lambda (c) (find c "/#")) uri :from-end t)))
     (values (take (+ pos 1) uri) (subseq uri (+ pos 1) (length uri)))))
 
+(defun uri-stem (uri)
+  "Return the stem of URI."
+  (nth-value 0 (split-uri uri)))
+
 (defun uri-resource (uri)
-  "Return the resource from a URI."
+  "Return the resource of URI."
   (nth-value 1 (split-uri uri)))
 
 ;; --------------------------------------------------- [ Query construction ]
@@ -323,7 +337,7 @@
 
 (defun guess-concept-display-property (concept)
   (dolist (l (concept-literals concept))
-    (let ((type (nth-value 1 (split-uri (literal-type l)))))
+    (let ((type (uri-resource (literal-type l))))
       (when (equal type "string")
         (return-from guess-concept-display-property
           (literal-uri l)))))
@@ -453,8 +467,7 @@
     (t obj)))
 
 (defun resource-to-id (uri)
-  (multiple-value-bind (stem id) (split-uri uri)
-    (strcat (uri-guess-prefix stem) "_" id)))
+  (strcat (uri-guess-prefix uri) "_" (uri-resource uri)))
 
 (defun prettify-label (label)
   "Return a pretty LABEL, removing underscores and fixing CamelCase."
@@ -479,7 +492,7 @@
   (list :|id| (resource-to-id concept-uri)
         :|uri| concept-uri
         :|label|
-        (list :|en| (prettify-label (nth-value 1 (split-uri concept-uri))))))
+        (list :|en| (prettify-label (uri-resource concept-uri)))))
 
 (defun concepts-to-json (concepts)
   (to-json
