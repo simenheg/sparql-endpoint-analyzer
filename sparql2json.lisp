@@ -332,7 +332,7 @@
   (incoming-links '() :type list)
   (subclasses '() :type list)
   (superclasses '() :type list)
-  (display "rdf_label" :type string)
+  (display 'false)
   (primary 'true :type symbol)
   (literals '() :type list))
 
