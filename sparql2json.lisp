@@ -353,6 +353,18 @@
   (when-let ((guess (guess-concept-display-property concept)))
     (setf (concept-display concept) (resource-to-id guess))))
 
+(defun sort-concept-fields (concept)
+  (setf (concept-outgoing-links concept)
+        (sort (concept-outgoing-links concept) #'string< :key #'link-uri))
+  (setf (concept-incoming-links concept)
+        (sort (concept-incoming-links concept) #'string< :key #'link-uri))
+  (setf (concept-subclasses concept)
+        (sort (concept-subclasses concept) #'string<))
+  (setf (concept-superclasses concept)
+        (sort (concept-superclasses concept) #'string<))
+  (setf (concept-literals concept)
+        (sort (concept-literals concept) #'string< :key #'literal-uri)))
+
 ;; ---------------------------------------------------------------- [ Links ]
 (defstruct link
   (uri "" :type string)
@@ -513,7 +525,7 @@
     (dolist (c concepts)
       (loop for l in (concept-literals c) do
         (pushnew (literal-uri l) datatype-properties :test #'string=)))
-    datatype-properties))
+    (sort datatype-properties #'string<)))
 
 (defun datatype-properties-to-json (concepts)
   (to-json (mapcar #'uri-to-plist (extract-datatype-properties concepts))))
@@ -525,7 +537,7 @@
             do (pushnew (link-uri ol) object-properties :test #'string=))
       (loop for il in (concept-incoming-links c)
             do (pushnew (link-uri il) object-properties :test #'string=)))
-    object-properties))
+    (sort object-properties #'string<)))
 
 (defun object-properties-to-json (concepts)
   (to-json (mapcar #'uri-to-plist (extract-object-properties concepts))))
@@ -639,6 +651,10 @@
           (set-concept-display-properties c)
           (remove-orphan-subclasses c concepts)
           (add-superclasses c concepts))
+
+        (setf concepts (sort concepts #'string< :key #'concept-uri))
+        (dolist (c concepts)
+          (sort-concept-fields c))
 
         (print-json concepts :concepts)
         (print-json concepts :object-properties)
