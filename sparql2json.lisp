@@ -77,26 +77,19 @@
         (split #\Newline (conf :uri-blacklist)))
   *config*)
 
-(defun filter-whitelist (values)
-  "Return copy of VALUES where every value has a prefix from the whitelist."
-  (when-let ((prefixes (conf :uri-whitelist)))
-    (setf values
-          (remove-if-not
-           (lambda (v) (or (not (looks-like-uri-p v))
-                      (some (lambda (p) (string-prefix-p p v)) prefixes)))
-           values :key #'first)))
-  values)
+(defun whitelisted-p (uri)
+  (find-if (lambda (p) (string-prefix-p p uri)) (conf :uri-whitelist)))
 
-(defun filter-blacklist (values)
-  "Return copy of VALUES where no value has a prefix from the blacklist."
-  (loop for prefix in (conf :uri-blacklist) do
-    (setf values
-          (remove-if
-           (lambda (v) (string-prefix-p prefix v)) values :key #'first)))
-  values)
+(defun blacklisted-p (uri)
+  (find-if (lambda (p) (string-prefix-p p uri)) (conf :uri-blacklist)))
 
-(defun filter (values)
-  (filter-whitelist (filter-blacklist values)))
+(defun disregard-uri-p (uri)
+  (or (blacklisted-p uri)
+      (and (conf :uri-whitelist)
+           (not (whitelisted-p uri)))))
+
+(defun filter (uri-list)
+  (remove-if #'disregard-uri-p uri-list :key #'first))
 
 ;; --------------------------------------------------------------- [ SPARQL ]
 (define-condition sparql-transaction-time-out (error) ())
