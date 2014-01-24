@@ -468,6 +468,18 @@
       (setf (literal-range-max literal)
             (second limits)))))
 
+(defun remove-undefined-links (concept concept-list)
+  (setf (concept-outgoing-links concept)
+        (remove-if-not
+         (lambda (target-uri)
+           (get-concept target-uri concept-list))
+         (concept-outgoing-links concept) :key #'link-target-uri))
+  (setf (concept-incoming-links concept)
+        (remove-if-not
+         (lambda (target-uri)
+           (get-concept target-uri concept-list))
+         (concept-incoming-links concept) :key #'link-target-uri)))
+
 ;; --------------------------------------------------------------- [ Output ]
 (defvar *deprecated-uris* nil
   "List of URIs that should be marked as deprecated in the JSON output.")
@@ -653,6 +665,7 @@
           (add-literal-limits c))
 
         (dolist (c concepts)
+          (remove-undefined-links c concepts)
           (set-concept-display-properties c)
           (remove-orphan-subclasses c concepts)
           (add-superclasses c concepts))
