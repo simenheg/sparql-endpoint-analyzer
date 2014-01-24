@@ -261,7 +261,15 @@
       concept property
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
-          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))))
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
+    (:deprecated-uris
+     (fmt
+      "SELECT DISTINCT ?uri WHERE {
+         { ?uri a <http://www.w3.org/2002/07/owl#DeprecatedClass> . }
+       UNION
+         { ?uri a <http://www.w3.org/2002/07/owl#DeprecatedProperty> . }
+       } ~@[ LIMIT ~a~]"
+      hard-limit))))
 
 ;; ------------------------------------------------------------ [ Retrieval ]
 (defun repeated-retrieve (section limit page results
@@ -468,6 +476,9 @@
             (second limits)))))
 
 ;; --------------------------------------------------------------- [ Output ]
+(defvar *deprecated-uris* nil
+  "List of URIs that should be marked as deprecated in the JSON output.")
+
 (defun to-json (obj)
   "Return JSON-representation of lisp OBJ."
   (cond
@@ -505,11 +516,12 @@
          (lambda (w) (if (every #'upper-case-p w) w (string-downcase w)))
          (rest split-label)))))))
 
-(defun uri-to-plist (concept-uri)
-  (list :|id| (resource-to-id concept-uri)
-        :|uri| concept-uri
-        :|label|
-        (list :|en| (prettify-label (uri-resource concept-uri)))))
+(defun uri-to-plist (uri)
+  `(:|id|    ,(resource-to-id uri)
+    :|uri|   ,uri
+    :|label| (:|en| ,(prettify-label (uri-resource uri)))
+    ,@(when (find uri *deprecated-uris* :test #'string=)
+         '(:|deprecated| true))))
 
 (defun concepts-to-json (concepts)
   (to-json
@@ -656,14 +668,16 @@
         (dolist (c concepts)
           (sort-concept-fields c))
 
-        (print-json concepts :concepts)
-        (print-json concepts :object-properties)
-        (print-json concepts :outgoing-links)
-        (print-json concepts :incoming-links)
-        (print-json concepts :subclasses)
-        (print-json concepts :superclasses)
-        (print-json concepts :datatype-properties)
-        (print-json concepts :literals))
+        (let ((*deprecated-uris*
+               (mapcar #'first (retrieve :deprecated-uris))))
+          (print-json concepts :concepts)
+          (print-json concepts :object-properties)
+          (print-json concepts :outgoing-links)
+          (print-json concepts :incoming-links)
+          (print-json concepts :subclasses)
+          (print-json concepts :superclasses)
+          (print-json concepts :datatype-properties)
+          (print-json concepts :literals)))
     (usocket:timeout-error ()
       (fmt-err "~%Endpoint not responding.~%"))
     (unknown-content-type (err)
