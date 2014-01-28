@@ -45,23 +45,39 @@
       (let ((prefix-stem (string-trim ":" prefix))
             (uri-stem (string-trim "<>" uri)))
         (setf (gethash uri-stem prefix-map) prefix-stem)))
-    (setf (getf *config* :prefix-map) prefix-map)))
+    (setf (getf *config* :prefix-map) prefix-map)
+    (setf (getf *config* :used-prefixes)
+          (hash-table-values (conf :prefix-map)))))
 
 (defun valid-prefix-p (prefix)
   "Return T if PREFIX can be used as a SPARQL prefix and as an ID in JS."
   (and (> (length prefix) 0)
        (every #'alpha-char-p prefix)
-       (not (find prefix (hash-table-values (conf :prefix-map))
-                  :test #'equal))))
+       (not (find prefix (conf :used-prefixes) :test #'equal))))
 
-(defun uri-guess-prefix (uri)
-  "Return a sensible prefix for URI."
+(defun fresh-random-prefix (prefixes)
+  "Return a random string of 3 characters, not already found in PREFIXES."
+  (flet ((rnd-chr () (random-elt "abcdefghijklmnopqrstuvwxyz")))
+    (loop for candidate = (fmt "~a~a~a" (rnd-chr) (rnd-chr) (rnd-chr))
+          until (not (find candidate prefixes :test #'equal))
+          finally (return candidate))))
+
+(defun guess-prefix (stem)
+  "Return a sensible prefix for STEM."
+  (or (let* ((split (reverse (rest (rest (split "/" stem)))))
+             (candidates (mapcar (lambda (s) (take 3 s)) split)))
+        (find-if #'valid-prefix-p candidates))
+      (fresh-random-prefix (conf :used-prefixes))))
+
+(defun uri-prefix (uri)
+  "Return a prefix for URI. If a prefix doesn't already exist, create one,
+and add it to the configuration."
   (let ((stem (uri-stem uri)))
     (or (gethash stem (conf :prefix-map))
-        (let* ((split (reverse (rest (rest (split "/" stem)))))
-               (candidates (mapcar (lambda (s) (take 3 s)) split)))
-          (find-if #'valid-prefix-p candidates))
-        "unk")))
+        (let ((new-prefix (guess-prefix stem)))
+          (setf (gethash stem (getf *config* :prefix-map)) new-prefix)
+          (push new-prefix (getf *config* :used-prefixes))
+          new-prefix))))
 
 (defun init-config (file-path)
   "Initialize *CONFIG* based on config file found at FILE-PATH."
@@ -506,7 +522,7 @@
     (t obj)))
 
 (defun resource-to-id (uri)
-  (strcat (uri-guess-prefix uri) "_" (uri-resource uri)))
+  (strcat (uri-prefix uri) "_" (uri-resource uri)))
 
 (defun prettify-label (label)
   "Return a pretty LABEL, removing underscores and fixing CamelCase."
