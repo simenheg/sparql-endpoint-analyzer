@@ -351,6 +351,7 @@ and add it to the configuration."
 ;; ------------------------------------------------------------- [ Concepts ]
 (defstruct concept
   (uri "" :type string)
+  (label "" :type string)
   (outgoing-links '() :type list)
   (incoming-links '() :type list)
   (subclasses '() :type list)
@@ -376,17 +377,23 @@ and add it to the configuration."
   (when-let ((guess (guess-concept-display-property concept)))
     (setf (concept-display concept) (resource-to-id guess))))
 
-(defun sort-concept-fields (concept)
-  (setf (concept-outgoing-links concept)
-        (sort (concept-outgoing-links concept) #'string< :key #'link-uri))
-  (setf (concept-incoming-links concept)
-        (sort (concept-incoming-links concept) #'string< :key #'link-uri))
-  (setf (concept-subclasses concept)
-        (sort (concept-subclasses concept) #'string<))
-  (setf (concept-superclasses concept)
-        (sort (concept-superclasses concept) #'string<))
-  (setf (concept-literals concept)
-        (sort (concept-literals concept) #'string< :key #'literal-uri)))
+(defun sort-concept-fields (concept label-map)
+  (flet ((uri-label (uri) (gethash uri label-map)))
+    (setf (concept-outgoing-links concept)
+          (sort (concept-outgoing-links concept) #'string<
+                :key (lambda (l) (uri-label (link-target-uri l)))))
+    (setf (concept-incoming-links concept)
+          (sort (concept-incoming-links concept) #'string<
+                :key (lambda (l) (uri-label (link-target-uri l)))))
+    (setf (concept-subclasses concept)
+          (sort (concept-subclasses concept) #'string<
+                :key #'uri-label))
+    (setf (concept-superclasses concept)
+          (sort (concept-superclasses concept) #'string<
+                :key #'uri-label))
+    (setf (concept-literals concept)
+          (sort (concept-literals concept) #'string<
+                :key (lambda (l) (uri-label (literal-uri l)))))))
 
 ;; ---------------------------------------------------------------- [ Links ]
 (defstruct link
@@ -546,7 +553,6 @@ and add it to the configuration."
 (defun uri-to-plist (uri)
   `(:|id|    ,(resource-to-id uri)
     :|uri|   ,uri
-    :|label| (:|en| ,(prettify-label (uri-resource uri)))
     ,@(when (find uri *deprecated-uris* :test #'string=)
          '(:|deprecated| true))))
 
@@ -556,18 +562,23 @@ and add it to the configuration."
      (append
       (uri-to-plist (concept-uri c))
       (list
+       :|label| (list :|en| (concept-label c))
        :|display| (concept-display c)
        :|primary| (concept-primary c))))))
+
+(defstruct property
+  (uri "" :type string)
+  (label "" :type string))
 
 (defun extract-datatype-properties (concepts)
   (let ((datatype-properties '()))
     (dolist (c concepts)
       (loop for l in (concept-literals c) do
         (pushnew (literal-uri l) datatype-properties :test #'string=)))
-    (sort datatype-properties #'string<)))
-
-(defun datatype-properties-to-json (concepts)
-  (to-json (mapcar #'uri-to-plist (extract-datatype-properties concepts))))
+    (mapcar
+     (lambda (uri)
+       (make-property :uri uri :label (prettify-label (uri-resource uri))))
+     datatype-properties)))
 
 (defun extract-object-properties (concepts)
   (let ((object-properties '()))
@@ -576,10 +587,17 @@ and add it to the configuration."
             do (pushnew (link-uri ol) object-properties :test #'string=))
       (loop for il in (concept-incoming-links c)
             do (pushnew (link-uri il) object-properties :test #'string=)))
-    (sort object-properties #'string<)))
+    (mapcar
+     (lambda (uri)
+       (make-property :uri uri :label (prettify-label (uri-resource uri))))
+     object-properties)))
 
-(defun object-properties-to-json (concepts)
-  (to-json (mapcar #'uri-to-plist (extract-object-properties concepts))))
+(defun properties-to-json (properties)
+  (to-json
+   (loop for p in properties collect
+     (append
+      (uri-to-plist (property-uri p))
+      `(:|label| (:|en| ,(property-label p)))))))
 
 (defun outgoing-link-to-plist (link)
   (list :|propId| (resource-to-id (link-uri link))
@@ -648,13 +666,13 @@ and add it to the configuration."
       :|typeId| (resource-to-id (concept-uri c))
       :|literalValues| (mapcar #'literal-to-plist (concept-literals c))))))
 
-(defun print-json (concepts category)
+(defun print-json (collection category)
   (destructuring-bind (json-printing-function name)
       (ecase category
         (:concepts
          (list #'concepts-to-json "Types"))
         (:object-properties
-         (list #'object-properties-to-json "ObjectProperties"))
+         (list #'properties-to-json "ObjectProperties"))
         (:outgoing-links
          (list #'outgoing-links-to-json "OutgoingLinks"))
         (:incoming-links
@@ -664,10 +682,10 @@ and add it to the configuration."
         (:superclasses
          (list #'superclasses-to-json "SuperclassRelations"))
         (:datatype-properties
-         (list #'datatype-properties-to-json "DatatypeProperties"))
+         (list #'properties-to-json "DatatypeProperties"))
         (:literals
          (list #'literals-to-json "LiteralValues")))
-    (when-let ((json (funcall json-printing-function concepts)))
+    (when-let ((json (funcall json-printing-function collection)))
       (format t "var json~a = ~a;~%" name json))))
 
 ;; -------------------------------------------------------------- [ Slurper ]
@@ -675,8 +693,14 @@ and add it to the configuration."
   (init-config config-file-path)
   (handler-case
       (let ((concepts
-             (mapcar (lambda (c) (make-concept :uri (first c)))
-                     (filter (retrieve :concepts)))))
+             (mapcar
+              (lambda (c)
+                (let ((uri (first c)))
+                  (make-concept
+                   :uri uri
+                   :label (prettify-label (uri-resource uri)))))
+              (filter (retrieve :concepts)))))
+
         (dolist (c concepts)
           (add-outgoing-links c)
           (add-link-types c)
@@ -692,20 +716,37 @@ and add it to the configuration."
           (remove-orphan-subclasses c concepts)
           (add-superclasses c concepts))
 
-        (setf concepts (sort concepts #'string< :key #'concept-uri))
-        (dolist (c concepts)
-          (sort-concept-fields c))
+        (let ((*deprecated-uris* (mapcar #'first (retrieve :deprecated-uris)))
+              (datatype-properties (extract-datatype-properties concepts))
+              (object-properties (extract-object-properties concepts)))
 
-        (let ((*deprecated-uris*
-               (mapcar #'first (retrieve :deprecated-uris))))
+          ;; Sort concept-, datatype property- and object property lists
+          (setf concepts (sort concepts #'string< :key #'concept-label))
+          (setf datatype-properties
+                (sort datatype-properties #'string< :key #'property-label))
+          (setf object-properties
+                (sort object-properties #'string< :key #'property-label))
+
+          ;; Sort internal concept fields
+          (let ((label-map (make-hash-table :test 'equal)))
+            (dolist (c concepts)
+              (setf (gethash (concept-uri c) label-map) (concept-label c)))
+            (dolist (p datatype-properties)
+              (setf (gethash (property-uri p) label-map) (property-label p)))
+            (dolist (p object-properties)
+              (setf (gethash (property-uri p) label-map) (property-label p)))
+            (dolist (c concepts)
+              (sort-concept-fields c label-map)))
+
           (print-json concepts :concepts)
-          (print-json concepts :object-properties)
+          (print-json object-properties :object-properties)
           (print-json concepts :outgoing-links)
           (print-json concepts :incoming-links)
           (print-json concepts :subclasses)
           (print-json concepts :superclasses)
-          (print-json concepts :datatype-properties)
+          (print-json datatype-properties :datatype-properties)
           (print-json concepts :literals)))
+
     (usocket:timeout-error ()
       (fmt-err "~%Endpoint not responding.~%"))
     (unknown-content-type (err)
