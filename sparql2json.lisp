@@ -242,9 +242,14 @@ and add it to the configuration."
     (:subclasses
      (fmt
       "SELECT ~a ?subclass WHERE {
-         ?subclass rdfs:subClassOf <~a> . } ~a"
+         ?subclass rdfs:subClassOf <~a> .
+         FILTER (?subclass != <~a>) .
+         FILTER NOT EXISTS {
+           ?subclass rdfs:subClassOf ?x .
+           ?x rdfs:subClassOf <~a> .
+           FILTER (?x != ?subclass && ?x != <~a>) } } ~a"
       (if (eq mode :paged) "REDUCED" "DISTINCT")
-      concept
+      concept concept concept concept
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
           (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
