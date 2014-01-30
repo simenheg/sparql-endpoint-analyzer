@@ -289,9 +289,9 @@ and add it to the configuration."
 ;; ------------------------------------------------------------ [ Retrieval ]
 (defun repeated-retrieve (section limit page results
                           &key concept property page-limit)
-  (fmt-err "[page ~a] Get ~a~@[ for ~a~]~@[/~a~] ... "
+  (fmt-err "[page ~a] ~a~@[ for ~a~]~@[/~a~] ... "
            (+ page 1)
-           (string-downcase section)
+           (string-capitalize section)
            (and concept (uri-resource concept))
            (and property (uri-resource property)))
   (let ((offset (* limit page)))
@@ -321,8 +321,8 @@ and add it to the configuration."
          :concept concept :property property :page-limit page-limit)))))
 
 (defun retrieve (section &optional concept property)
-  (fmt-err "[quick] Get ~a~@[ for ~a~]~@[/~a~] ... "
-           (string-downcase section)
+  (fmt-err "[get] ~a~@[ for ~a~]~@[/~a~] ... "
+           (string-capitalize section)
            (and concept (uri-resource concept))
            (and property (uri-resource property)))
   (handler-case
