@@ -534,7 +534,9 @@ and add it to the configuration."
     (t obj)))
 
 (defun resource-to-id (uri)
-  (strcat (uri-prefix uri) "_" (uri-resource uri)))
+  (strcat
+   (uri-prefix uri) "_"
+   (substitute #\_ #\. (uri-resource uri))))
 
 (defun prettify-label (label)
   "Return a pretty LABEL, removing underscores and fixing CamelCase."
