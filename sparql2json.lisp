@@ -253,6 +253,15 @@ and add it to the configuration."
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
           (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
+    (:every-subclass
+     (fmt
+      "SELECT ~a ?subclass WHERE {
+         ?subclass rdfs:subClassOf <~a> . } ~a"
+      (if (eq mode :paged) "REDUCED" "DISTINCT")
+      concept
+      (if (eq mode :paged)
+          (fmt "LIMIT ~a OFFSET ~a" limit offset)
+          (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
     (:literal-type
      (fmt
       "SELECT (DATATYPE(?targetObj) as ?type) WHERE {
