@@ -113,21 +113,28 @@ and add it to the configuration."
   *config*)
 
 (defun exclusively-whitelisted-p (uri)
+  "Return T if URI is listed under `exclusive-whitelist' in the current
+configuration."
   (find-if (lambda (p) (string-prefix-p p uri)) (conf :exclusive-whitelist)))
 
 (defun whitelisted-p (uri)
+  "Return T if URI is listed under `whitelist' in the current configuration."
   (find-if (lambda (p) (string-prefix-p p uri)) (conf :whitelist)))
 
 (defun blacklisted-p (uri)
+  "Return T if URI is listed under `blacklist' in the current configuration."
   (find-if (lambda (p) (string-prefix-p p uri)) (conf :blacklist)))
 
 (defun disregard-uri-p (uri)
+  "Return T if URI should be ignored, according to the current black- and
+whitelists."
   (if (conf :exclusive-whitelist)
       (not (exclusively-whitelisted-p uri))
       (and (blacklisted-p uri)
            (not (whitelisted-p uri)))))
 
 (defun filter (uri-list)
+  "Return a copy of URI-LIST filtered by `disregard-uri-p'."
   (remove-if #'disregard-uri-p uri-list :key #'first))
 
 ;; --------------------------------------------------------------- [ SPARQL ]
@@ -154,6 +161,7 @@ and add it to the configuration."
        (assoc-value headers :content-type)))))
 
 (defun xml-bindings-to-list (bindings)
+  "Return a list the decoded XML BINDINGS."
   (mapcar
    (lambda (binding)
      (let ((name (car (cdaadr binding)))
@@ -165,6 +173,8 @@ and add it to the configuration."
    (cddr bindings)))
 
 (defun parse-sparql-response (raw-results content-type)
+  "Parse raw response from the SPARQL server, and return the variable
+bindings. Supported CONTENT-TYPES are JSON and XML."
   (cond
     ((search "json" content-type :test #'equal) ; JSON format
      (let ((parsed (with-input-from-string (s raw-results)
@@ -178,19 +188,24 @@ and add it to the configuration."
     (t (error 'unknown-content-type :content-type content-type))))
 
 (defun query-to-bindings (endpoint query)
+  "Return the list of bindings from sending QUERY to ENDPOINT."
   (multiple-value-call #'parse-sparql-response
     (sparql-query endpoint (strcat (conf :prefixes) query))))
 
 (defun binding-to-uri (binding)
+  "Extract the URI from a single binding."
   (assoc-value (rest binding) :value))
 
 (defun bindings-to-lists (bindings)
+  "Return a list of result based on BINDINGS."
   (mapcar (lambda (b) (mapcar #'binding-to-uri b))
           (remove-if (lambda (type) (equal "bnode" type))
                      bindings
                      :key #'cdadar)))
 
 (defun query-to-uri-list (query)
+  "Send QUERY to the current SPARQL endpoint, and return the results as a list
+of URI lists."
   (bindings-to-lists (query-to-bindings (conf :endpoint) query)))
 
 (defun split-uri (uri)
@@ -210,7 +225,12 @@ and add it to the configuration."
 ;; --------------------------------------------------- [ Query construction ]
 (defun make-query
     (section mode &key (limit 0) (offset 0) concept property hard-limit)
-  "MODE should be one of :quick or :paged."
+  "Construct SPARQL of type SECTION.
+MODE should be either `:quick' or `:paged', where the latter will retrieve
+results with LIMIT and OFFSET.
+Some of the sections require a CONCEPT to retrieve information about, and some
+require further refinement through a PROPERTY.
+HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
   (ecase section
     (:concepts
      (fmt
