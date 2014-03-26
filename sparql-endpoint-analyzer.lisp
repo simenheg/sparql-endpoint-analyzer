@@ -1,6 +1,6 @@
-;#!/usr/bin/sbcl --script
+#!/usr/bin/sbcl --script
 
-;;; sparql2json.lisp --- SPARQL endpoint analyzer for PepeSearch
+;;; sparql-endpoint-analyzer.lisp --- SPARQL endpoint analyzer for PepeSearch
 
 ;; Copyright (C) 2013-2014 Simen Heggestøyl
 
@@ -40,11 +40,11 @@
 (load "util.lisp")
 (load "config.lisp")
 
-(defpackage :sparql2json
+(defpackage :sparql-endpoint-analyzer
   (:use :cl :util :alexandria :cl-ppcre :json :parse-number)
   (:import-from :config :read-config-file))
 
-(in-package :sparql2json)
+(in-package :sparql-endpoint-analyzer)
 
 ;; -------------------------------------------------------- [ Configuration ]
 (defvar *config* nil
@@ -809,7 +809,7 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
 (defun main (&aux (args sb-ext:*posix-argv*))
   (if (find "compile" args :test #'string=)
       (sb-ext:save-lisp-and-die
-       "sparql2json"
+       "sparql-endpoint-analyzer"
        :compression (if (find :sb-core-compression *features*) t nil)
        :toplevel #'main
        :executable t)
@@ -818,4 +818,4 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
         (sb-sys:interactive-interrupt ()
           (fmt-err "~%Bye.~%")))))
 
-;; (main)
+(main)
