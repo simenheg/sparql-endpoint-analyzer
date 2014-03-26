@@ -28,42 +28,30 @@
 
 * Configuration
   A configuration file for the SPARQL endpoint analyzer consists of 8
-  sections, described below. For a sample configuration file, see [[Sample
-  Configuration File]].
+  sections, described below. For a sample configuration file, see the next
+  section.
 
-** ~endpoint~
-   URL of the SPARQL endpoint of interest.
-
-** ~hard-limit~
-   Hard limit for each query sent, *before* filtering is done. This affects
-   the number of retrieved concepts, literals, links and subclass relations.
-
-** ~page-limit~
-   The maximum number pages to retrieve after getting a timeout, and
-   attempting a paged retrieval.
-
-** ~results-per-page-limit~
-   The maximum number of results per page during a paged retrieval.
-
-** ~prefixes~
-   A list of predefined prefixes for convenient naming of JavaScript
-   variables.
-
-** ~exclusive-whitelist~
-   A list of URI prefixes. Results will *only* include URIs prefixed by a
-   string in this list. An empty list disables this feature. When enabled,
-   this feature overrides the normal black- and whitelist.
-
-** ~blacklist~
-   A list of URI prefixes. Results will *not* include URIs prefixed by a
-   string in this list, unless listed in ~whitelist~. An empty list disables
-   this feature.
-
-** ~whitelist~
-   A list of URI prefixes. Results will *not* include URIs prefixed by strings
-   listed in ~blacklist~, unless they're prefixed by a string in this
-   list. Useful when one wants to whitelist particular URIs in a blacklisted
-   domain.
+  - ~endpoint~: URL of the SPARQL endpoint of interest.
+  - ~hard-limit~: hard limit for each query sent, *before* filtering is
+    done. This affects the number of retrieved concepts, literals, links and
+    subclass relations.
+  - ~page-limit~: maximum number pages to retrieve after getting a
+    timeout, and attempting a paged retrieval.
+  - ~results-per-page-limit~: maximum number of results per page during a
+    paged retrieval.
+  - ~prefixes~: list of predefined prefixes for convenient naming of
+    JavaScript variables.
+  - ~exclusive-whitelist~: list of URI prefixes. Results will *only* include
+    URIs prefixed by a string in this list. An empty list disables this
+    feature. When enabled, this feature overrides the normal black- and
+    whitelist.
+  - ~blacklist~: list of URI prefixes. Results will *not* include URIs
+    prefixed by a string in this list, unless listed in ~whitelist~. An empty
+    list disables this feature.
+  - ~whitelist~: list of URI prefixes. Results will *not* include URIs
+    prefixed by strings listed in ~blacklist~, unless they're prefixed by a
+    string in this list. Useful when one wants to whitelist particular URIs in
+    a blacklisted domain.
 
 * Sample Configuration File
   The following configuration file can be used to slurp the [[http://data.computas.com/][Norwegian Entity
@@ -169,7 +157,7 @@
 ** Datatype properties
    We define datatype properties as literals linked to by concepts via any
    property. That is, every ~?literal~ matched by the following RDF graph,
-   filtered by the [[http://www.w3.org/TR/2013/REC-sparql11-query-20130321/#func-isLiteral][~isLiteral~]] SPARQL predicate:
+   filtered by the [[http://www.w3.org/TR/2013/REC-sparql11-query-20130321/#func-isLiteral][isLiteral]] SPARQL predicate:
 
    #+BEGIN_SRC sparql
      ?concept a ?type .
