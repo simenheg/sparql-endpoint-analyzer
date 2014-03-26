@@ -29,7 +29,7 @@
 (defun string-list-to-plist (string-list)
   (loop for (section content) on string-list by #'cddr append
     (list (string-to-keyword section)
-          (string-trim +whitespace+ content))))
+          (if content (string-trim +whitespace+ content) ""))))
 
 (defun read-config-file (file-path)
   "Return a plist on the form (:SECTION \"content\" ...) from FILE-PATH."
