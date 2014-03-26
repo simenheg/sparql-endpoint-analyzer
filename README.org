@@ -1,0 +1,186 @@
+* SPARQL endpoint analyzer
+  This is the SPARQL endpoint analyzer component of PepeSearch and friends:
+  tools developed at the University of Oslo for simple exploration and
+  querying of Linked Data sets.
+
+  [[http://sws.ifi.uio.no/project/semicolon/search/][Try PepeSearch]] in action with data from the Norwegian Company
+  Registry. There is also an [[http://sws.ifi.uio.no/project/semicolon/advancedsearch/][advanced version]].
+
+  The user interface of PepeSearch employs a configuration file in order to
+  present the user with available concepts, links and properties. This program
+  automates the task of creating that configuration file.
+
+* Download
+  - Explore the [[https://github.com/simenheg/sparql-endpoint-analyzer][source tree]]
+  - As [[https://github.com/simenheg/sparql-endpoint-analyzer/archive/master.zip][source]] (requires [[http://www.sbcl.org/platform-table.html][sbcl]], version 1.0.44 or newer)
+  - As Linux binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-linux-amd64][amd64]]
+  - As OS X binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-osx-amd64][amd64]]
+
+* Usage
+  Source- and binary versions are run in the same way:
+
+#+BEGIN_SRC sh
+  ./sparql-endpoint-analyzer.lisp settings.conf 1>output.js
+#+END_SRC
+
+  This command reads the configuration file ~settings.conf~, and puts the
+  result into the file ~output.js~.
+
+* Configuration
+  A configuration file for the SPARQL endpoint analyzer consists of 8
+  sections, described below. For a sample configuration file, see [[Sample
+  Configuration File]].
+
+** ~endpoint~
+   URL of the SPARQL endpoint of interest.
+
+** ~hard-limit~
+   Hard limit for each query sent, *before* filtering is done. This affects
+   the number of retrieved concepts, literals, links and subclass relations.
+
+** ~page-limit~
+   The maximum number pages to retrieve after getting a timeout, and
+   attempting a paged retrieval.
+
+** ~results-per-page-limit~
+   The maximum number of results per page during a paged retrieval.
+
+** ~prefixes~
+   A list of predefined prefixes for convenient naming of JavaScript
+   variables.
+
+** ~exclusive-whitelist~
+   A list of URI prefixes. Results will *only* include URIs prefixed by a
+   string in this list. An empty list disables this feature. When enabled,
+   this feature overrides the normal black- and whitelist.
+
+** ~blacklist~
+   A list of URI prefixes. Results will *not* include URIs prefixed by a
+   string in this list, unless listed in ~whitelist~. An empty list disables
+   this feature.
+
+** ~whitelist~
+   A list of URI prefixes. Results will *not* include URIs prefixed by strings
+   listed in ~blacklist~, unless they're prefixed by a string in this
+   list. Useful when one wants to whitelist particular URIs in a blacklisted
+   domain.
+
+* Sample Configuration File
+  The following configuration file can be used to slurp the [[http://data.computas.com/][Norwegian Entity
+  Registry endpoint]]:
+
+#+BEGIN_SRC conf
+  # Sample configuration file to retrieve information from the Norwegian Entity
+  # Registry (http://data.computas.com/)
+
+  [endpoint]
+  http://data.computas.com:3030/sparql
+
+  [hard-limit]
+  10000
+
+  [page-limit]
+  5
+
+  [results-per-page-limit]
+  10000
+
+  [prefixes]
+  PREFIX dc: <http://purl.org/dc/elements/1.1/>
+  PREFIX dcterms: <http://purl.org/dc/terms/>
+  PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+  PREFIX lok: <http://data.computas.com/informasjonsmodell/lokasjon/>
+  PREFIX nace: <http://data.computas.com/enhetsregisteret/nace/>
+  PREFIX org: <http://data.computas.com/informasjonsmodell/organisasjon/>
+  PREFIX owl: <http://www.w3.org/2002/07/owl#>
+  PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+  PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+  PREFIX reg: <http://data.computas.com/informasjonsmodell/regnskapsregisteret/>
+  PREFIX skos: <http://www.w3.org/2004/02/skos/core/>
+  PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+  [exclusive-whitelist]
+
+  [whitelist]
+  http://www.w3.org/2000/01/rdf-schema#label
+
+  [blacklist]
+  http://www.w3.org/1999/02/22-rdf-syntax-ns#
+  http://www.w3.org/2002/07/owl#
+  http://www.w3.org/2004/02/skos/core#
+  http://www.w3.org/2000/01/rdf-schema#
+#+END_SRC
+
+* What is collected
+  The PepeSearch configuration file is in the JSON (JavaScript Object
+  Notation) data format, which integrates naturally with the existing
+  JavaScript code base. Four categories of data are collected in this file:
+  
+   - Types
+   - Object properties
+   - Datatype properties
+   - Subclass relations
+  
+  For each of these categories, further details are elaborated in the sections
+  that follow.
+
+** Types
+   Every type found in the dataset is recorded. That is, every ~?type~ matched
+   by the following RDF triple:
+   
+   #+BEGIN_SRC sparql
+       ?concept a ?type .
+   #+END_SRC
+   
+   Types are mapped to concepts the user interface. Together with its URI,
+   each type entry also contains a short ID for convenience, a human-readable
+   label with possible translations, the ID of a human-readable datatype
+   property for use in the interface, and whether or not the type has any
+   subtypes.
+   
+   Example entry:
+   #+BEGIN_SRC javascript
+     {
+         "id": "foaf_Person",
+         "uri": "http://xmlns.com/foaf/0.1/Person",
+         "label": {
+             "en": "Person"
+         },
+         "display": "foaf_name",
+         "primary": true
+     }
+   #+END_SRC
+
+** Object properties
+   We define an object property as any RDF property linking two resources that
+   have an RDF type. That is, every ~?object_property~ matched by the
+   following RDF graph:
+   
+   #+BEGIN_SRC sparql
+     ?subject a ?subject_type .
+     ?subject ?object_property ?object .
+     ?object a ?object_type .
+   #+END_SRC
+
+   Object properties are mapped to incoming- and outgoing links in the user
+   interface. Objects become targets of the subjects' outgoing links, while
+   the subjects become target of the objects' incoming links.
+
+** Datatype properties
+   We define datatype properties as literals linked to by concepts via any
+   property. That is, every ~?literal~ matched by the following RDF graph,
+   filtered by the [[http://www.w3.org/TR/2013/REC-sparql11-query-20130321/#func-isLiteral][~isLiteral~]] SPARQL predicate:
+
+   #+BEGIN_SRC sparql
+     ?concept a ?type .
+     ?concept ?property ?literal .
+   #+END_SRC
+
+** Subclass relations
+   Subclasses are defined by the [[http://www.w3.org/TR/2014/REC-rdf-schema-20140225/#ch_subclassof][rdfs:subClassOf]] property. That is, every
+   ~?subclass~ matched by the following RDF graph, where ~?subclass~ ≠
+   ~?class~:
+
+   #+BEGIN_SRC sparql
+     ?subclass rdfs:subClassOf ?class .
+   #+END_SRC
