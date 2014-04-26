@@ -126,12 +126,13 @@ configuration."
   (find-if (lambda (p) (string-prefix-p p uri)) (conf :blacklist)))
 
 (defun disregard-uri-p (uri)
-  "Return T if URI should be ignored, according to the current black- and
-whitelists."
-  (if (conf :exclusive-whitelist)
-      (not (exclusively-whitelisted-p uri))
-      (and (blacklisted-p uri)
-           (not (whitelisted-p uri)))))
+  "Return T if URI should be disregarded, according to the current black- and
+whitelist rules. Strings that do not look like URIs are also disregarded."
+  (or (not (looks-like-uri-p uri))
+      (if (conf :exclusive-whitelist)
+          (not (exclusively-whitelisted-p uri))
+          (and (blacklisted-p uri)
+               (not (whitelisted-p uri))))))
 
 (defun filter (uri-list)
   "Return a copy of URI-LIST filtered by `disregard-uri-p'."
