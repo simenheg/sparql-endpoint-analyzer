@@ -141,7 +141,8 @@ whitelist rules. Strings that do not look like URIs are also disregarded."
 ;; --------------------------------------------------------------- [ SPARQL ]
 (define-condition sparql-transaction-time-out (error) ())
 (define-condition unknown-content-type (error)
-  ((content-type :initarg :content-type :reader content-type)))
+  ((content-type :initarg :content-type :reader content-type)
+   (content :initarg :content :reader content)))
 
 (defun sparql-query (endpoint query)
   "Send QUERY to ENDPOINT; return result as string."
@@ -186,7 +187,9 @@ bindings. Supported CONTENT-TYPES are JSON and XML."
        (mapcar
         #'xml-bindings-to-list
         (cddr (find "results" (cddr parsed) :key #'caar :test #'equal)))))
-    (t (error 'unknown-content-type :content-type content-type))))
+    (t (error 'unknown-content-type
+              :content-type content-type
+              :content raw-results))))
 
 (defun query-to-bindings (endpoint query)
   "Return the list of bindings from sending QUERY to ENDPOINT."
@@ -804,8 +807,9 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
     (usocket:timeout-error ()
       (fmt-err "~%Endpoint not responding.~%"))
     (unknown-content-type (err)
-      (fmt-err "~%Unknown content type from endpoint: ~a.~%"
-               (content-type err)))))
+      (fmt-err
+       "~%Unknown content type from endpoint: ~a.~%~%Server response:~%~a"
+       (content-type err) (content err)))))
 
 (defun main (&aux (args sb-ext:*posix-argv*))
   (if (find "compile" args :test #'string=)
