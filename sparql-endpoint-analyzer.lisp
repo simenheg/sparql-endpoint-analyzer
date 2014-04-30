@@ -126,9 +126,15 @@ configuration."
   (find-if (lambda (p) (string-prefix-p p uri)) (conf :blacklist)))
 
 (defun disregard-uri-p (uri)
-  "Return T if URI should be disregarded, according to the current black- and
-whitelist rules. Strings that do not look like URIs are also disregarded."
+  "Return T if URI should be disregarded. An URI is disregarded by any of the
+following criteria:
+ 1) The exclusive whitelist feature is enabled, and the URI's stem is not
+    found in the exclusive whitelist.
+ 2) The URI's stem is blacklisted, and not whitelisted.
+ 3) It doesn't look like a URI according to `looks-like-uri-p'.
+ 4) The URI is a stem without a resource (it ends in / or #)."
   (or (not (looks-like-uri-p uri))
+      (string= (nth-value 1 (split-uri uri)) "")
       (if (conf :exclusive-whitelist)
           (not (exclusively-whitelisted-p uri))
           (and (blacklisted-p uri)
