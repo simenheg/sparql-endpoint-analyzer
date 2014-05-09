@@ -1,7 +1,7 @@
 * SPARQL endpoint analyzer
-  This is the SPARQL endpoint analyzer component of PepeSearch and friends:
+  This is the SPARQL endpoint analyzer component of [[https://github.com/guiveg/pepesearch][PepeSearch]] and friends:
   tools developed at the University of Oslo for simple exploration and
-  querying of Linked Data sets.
+  querying of Linked Open Data sets.
 
   [[http://sws.ifi.uio.no/project/semicolon/search/][Try PepeSearch]] in action with data from the Norwegian Company
   Registry. There is also an [[http://sws.ifi.uio.no/project/semicolon/advancedsearch/][advanced version]].
@@ -13,8 +13,8 @@
 * Download
   - Explore the [[https://github.com/simenheg/sparql-endpoint-analyzer][source tree]]
   - As [[https://github.com/simenheg/sparql-endpoint-analyzer/archive/master.zip][source]] (requires [[http://www.sbcl.org/platform-table.html][sbcl]], version 1.0.44 or newer)
-  - As Linux binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-linux-amd64][amd64]]
-  - As OS X binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-osx-amd64][amd64]]
+  - As Linux binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-linux-amd64][amd64]] (from 26/03/14)
+  - As OS X binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-osx-amd64][amd64]] (from 29/04/14)
 
 * Usage
   Source- and binary versions are run in the same way:
@@ -109,8 +109,8 @@
    - Datatype properties
    - Subclass relations
   
-  For each of these categories, further details are elaborated in the sections
-  that follow.
+  For each of these categories, further details are elaborated on in the
+  sections that follow.
 
 ** Types
    Every type found in the dataset is recorded. That is, every ~?type~ matched
@@ -120,7 +120,7 @@
        ?concept a ?type .
    #+END_SRC
    
-   Types are mapped to concepts the user interface. Together with its URI,
+   Types are mapped to concepts in the user interface. Together with its URI,
    each type entry also contains a short ID for convenience, a human-readable
    label with possible translations, the ID of a human-readable datatype
    property for use in the interface, and whether or not the type has any
