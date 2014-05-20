@@ -146,9 +146,13 @@ following criteria:
 
 ;; --------------------------------------------------------------- [ SPARQL ]
 (define-condition sparql-transaction-time-out (error) ())
+
 (define-condition unknown-content-type (error)
   ((content-type :initarg :content-type :reader content-type)
    (content :initarg :content :reader content)))
+
+(define-condition unknown-response-format (error)
+  ((response :initarg :response :reader response)))
 
 (defun sparql-query (endpoint query)
   "Send QUERY to ENDPOINT; return result as string."
@@ -180,14 +184,52 @@ following criteria:
              (cons :value value))))
    (cddr bindings)))
 
+(defun parse-json-response (response)
+  "Return a list of variable bindings from the JSON RESPONSE."
+  (cond
+    ;; Response format:
+    ;; (:RESULTS ...
+    ;;  (:BINDINGS
+    ;;   ((:row1-col1 (:TYPE . "...") (:VALUE . "..."))
+    ;;    (:row1-col2 (:TYPE . "...") (:VALUE . "..."))
+    ;;    ...)
+    ;;   ((:row2-col1 (:TYPE . "...") (:VALUE . "..."))
+    ;;    (:row2-col2 (:TYPE . "...") (:VALUE . "..."))
+    ;;    ...)
+    ;;   ...))
+    ((find :results response :key #'first)
+     (let ((res (find :results response :key #'first)))
+       (assoc-value (rest res) :bindings)))
+
+    ;; Response format:
+    ;; ((:COLUMNS "col1" "col2")
+    ;;  (:ROWS
+    ;;   (((:TYPE . "...") (:VALUE . "..."))
+    ;;    ((:TYPE . "...") (:VALUE . "...")))
+    ;;   (((:TYPE . "...") (:VALUE . "..."))
+    ;;    ((:TYPE . "...") (:VALUE . "...")))))
+    ((find :columns response :key #'first)
+     (let ((cols (find :columns response :key #'first))
+           (rows (find :rows response :key #'first)))
+       (mapcar (lambda (r) (mapcar #'cons (rest cols) r)) (rest rows)))) 
+    (t (error 'unknown-response-format :response response))))
+
 (defun parse-sparql-response (raw-results content-type)
   "Parse raw response from the SPARQL server, and return the variable
-bindings. Supported CONTENT-TYPES are JSON and XML."
+bindings. Supported CONTENT-TYPES are JSON and XML.
+Bindings are on the format:
+  (((:col1 (:TYPE . \"...\") (:VALUE . \"...\"))
+    (:col2 (:TYPE . \"...\") (:VALUE . \"...\"))
+    ...)
+   ((:col1 (:TYPE . \"...\") (:VALUE . \"...\"))
+    (:col2 (:TYPE . \"...\") (:VALUE . \"...\"))
+    ...)
+   ...)"
   (cond
     ((search "json" content-type :test #'equal) ; JSON format
      (let ((parsed (with-input-from-string (s raw-results)
                      (json:decode-json s))))
-       (assoc-value (rest (find :results parsed :key #'first)) :bindings)))
+       (parse-json-response parsed)))
     ((search "xml" content-type :test #'equal) ; XML format
      (let ((parsed (xmls:parse raw-results)))
        (mapcar
@@ -814,8 +856,12 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
       (fmt-err "~%Endpoint not responding.~%"))
     (unknown-content-type (err)
       (fmt-err
-       "~%Unknown content type from endpoint: ~a.~%~%Server response:~%~a"
-       (content-type err) (content err)))))
+       "~%Unknown content type from endpoint: ~a.~%~%Server response:~%~s"
+       (content-type err) (content err)))
+    (unknown-response-format (err)
+      (fmt-err
+       "~%Unknown response format from endpoint.~%~%Server response format:~%~s"
+       (response err)))))
 
 (defun main (&aux (args sb-ext:*posix-argv*))
   (if (find "compile" args :test #'string=)
