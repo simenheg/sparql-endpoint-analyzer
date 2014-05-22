@@ -41,8 +41,12 @@
 (load "config.lisp")
 
 (defpackage :sparql-endpoint-analyzer
-  (:use :cl :util :alexandria :cl-ppcre :json :parse-number)
-  (:import-from :config :read-config-file))
+  (:use :cl :util :cl-ppcre :json :parse-number)
+  (:import-from :config
+                :read-config-file)
+  (:import-from :alexandria
+                :assoc-value :emptyp :hash-table-values :random-elt :when-let
+                :when-let*))
 
 (in-package :sparql-endpoint-analyzer)
 
