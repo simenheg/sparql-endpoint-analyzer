@@ -13,7 +13,7 @@
 * Download
   - Explore the [[https://github.com/simenheg/sparql-endpoint-analyzer][source tree]]
   - As [[https://github.com/simenheg/sparql-endpoint-analyzer/archive/master.zip][source]] (requires [[http://www.sbcl.org/platform-table.html][sbcl]], version 1.0.44 or newer)
-  - As Linux binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-linux-amd64][amd64]] (from 26/03/14)
+  - As Linux binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-linux-amd64][amd64]] (from 22/05/14)
   - As OS X binary: [[http://folk.uio.no/simenheg/sparql-endpoint-analyzer-osx-amd64][amd64]] (from 29/04/14)
 
 * Usage
