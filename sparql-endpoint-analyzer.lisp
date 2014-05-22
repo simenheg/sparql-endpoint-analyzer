@@ -561,6 +561,11 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
 (defun xsd-year-p (type)
   (find type +xsd-year-types+ :test #'equal))
 
+(defun xsd-year (date)
+  "Return the year component of a xsd:date, xsd:dateTime, xsd:gYear, or
+xsd:gYearMonth."
+  (first (split "-" date)))
+
 ;; ------------------------------------------------------------- [ Literals ]
 (defstruct literal
   (uri "" :type string)
@@ -582,23 +587,21 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
 
 (defun add-literal-limits (concept)
   (dolist (literal (concept-literals concept))
-    (when-let*
-      ((type
-        (and (literal-type literal)
-             (uri-resource (literal-type literal))))
-       (type-section-keyword
-        (cond
-          ((xsd-numeric-p type) :numeric-limits)
-          ((xsd-year-p type) :year-limits)))
-       (limits
-        (first
-         (retrieve
-          type-section-keyword
-          (concept-uri concept) (literal-uri literal)))))
-      (setf (literal-range-min literal)
-            (first limits))
-      (setf (literal-range-max literal)
-            (second limits)))))
+    (when-let ((type (and (literal-type literal)
+                          (uri-resource (literal-type literal)))))
+      (when (or (xsd-numeric-p type)
+                (xsd-year-p type))
+        (when-let ((limits
+                    (first
+                     (retrieve
+                      :numeric-limits
+                      (concept-uri concept)
+                      (literal-uri literal)))))
+          (if (xsd-year-p type)
+              (setf (literal-range-min literal) (xsd-year (first limits))
+                    (literal-range-max literal) (xsd-year (second limits)))
+              (setf (literal-range-min literal) (first limits)
+                    (literal-range-max literal) (second limits))))))))
 
 (defun remove-undefined-links (concept concept-list)
   (setf (concept-outgoing-links concept)
