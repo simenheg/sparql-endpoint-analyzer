@@ -2,7 +2,7 @@
 
 ;;; sparql-endpoint-analyzer.lisp --- SPARQL endpoint analyzer for PepeSearch
 
-;; Copyright (C) 2013-2014 Simen Heggestøyl
+;; Copyright (C) 2013-2015 Simen Heggestøyl
 
 ;; This program is free software: you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by the Free
@@ -215,7 +215,7 @@ following criteria:
     ((find :columns response :key #'first)
      (let ((cols (find :columns response :key #'first))
            (rows (find :rows response :key #'first)))
-       (mapcar (lambda (r) (mapcar #'cons (rest cols) r)) (rest rows)))) 
+       (mapcar (lambda (r) (mapcar #'cons (rest cols) r)) (rest rows))))
     (t (error 'unknown-response-format :response response))))
 
 (defun parse-sparql-response (raw-results content-type)
@@ -391,7 +391,13 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
        UNION
          { ?uri a <http://www.w3.org/2002/07/owl#DeprecatedProperty> . }
        } ~@[ LIMIT ~a~]"
-      hard-limit))))
+      hard-limit))
+    (:label
+     (fmt
+      "SELECT ?label WHERE {
+         <~a> <http://www.w3.org/2000/01/rdf-schema#label> ?label .
+       } LIMIT 1"
+      concept))))
 
 ;; ------------------------------------------------------------ [ Retrieval ]
 (defun repeated-retrieve (section limit page results
@@ -607,6 +613,11 @@ xsd:gYearMonth."
               (setf (literal-range-min literal) (first limits)
                     (literal-range-max literal) (second limits))))))))
 
+(defun add-label (concept)
+  "Add label to CONCEPT, if defined by rdfs:label in the dataset."
+  (when-let ((label (caar (retrieve :label (concept-uri concept)))))
+    (setf (concept-label concept) label)))
+
 (defun remove-undefined-links (concept concept-list)
   (setf (concept-outgoing-links concept)
         (remove-if-not
@@ -820,7 +831,8 @@ xsd:gYearMonth."
           (add-subclasses c concepts)
           (add-literals c)
           (add-literal-types c)
-          (add-literal-limits c))
+          (add-literal-limits c)
+          (add-label c))
 
         (dolist (c concepts)
           (remove-undefined-links c concepts)

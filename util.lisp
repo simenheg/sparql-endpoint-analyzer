@@ -1,6 +1,6 @@
 ;;; util.lisp --- Utility definitions
 
-;; Copyright (C) 2013-2014 Simen Heggestøyl
+;; Copyright (C) 2013-2015 Simen Heggestøyl
 
 ;; This program is free software: you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by the Free
