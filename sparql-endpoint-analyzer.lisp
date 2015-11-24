@@ -576,6 +576,13 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
 xsd:gYearMonth."
   (first (split "-" date)))
 
+(defun xsd-ui-type (type)
+  "Return an appropriate UI type for the given XSD data type."
+  (cond
+    ((xsd-numeric-p type) "range")
+    ((xsd-year-p type) "datetimerange")
+    (t "string")))
+
 ;; ------------------------------------------------------------- [ Literals ]
 (defstruct literal
   (uri "" :type string)
@@ -741,7 +748,7 @@ xsd:gYearMonth."
      (list :|propId| (resource-to-id (literal-uri literal)))
      (list :|searchable| 'true)
      (list :|dataType| datatype)
-     (list :|uiType| (if numeric "range" "string"))
+     (list :|uiType| (xsd-ui-type datatype))
      (and
       numeric range-min range-max
       (handler-case
