@@ -626,6 +626,8 @@ xsd:gYearMonth."
     (setf (concept-label concept) label)))
 
 (defun remove-undefined-links (concept concept-list)
+  "Remove links from CONCEPT with undefined target types.
+Defined target types are determined by CONCEPT-LIST."
   (setf (concept-outgoing-links concept)
         (remove-if-not
          (lambda (target-uri)
