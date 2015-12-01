@@ -105,7 +105,7 @@ and add it to the configuration."
   (handler-case
       (setf *config* (read-config-file file-path))
     (sb-int:simple-file-error ()
-      (fmt-err "ERROR: Configuration file '~a' not found.~%" file-path)
+      (fmt-err "[error] Configuration file '~a' not found.~%" file-path)
       (sb-ext:exit)))
   (init-prefix-map (conf :prefixes))
   (setf (getf *config* :exclusive-whitelist)
@@ -881,14 +881,14 @@ xsd:gYearMonth."
     (usocket:connection-refused-error ()
       (fmt-err "~%[error] Connection refused.~%"))
     (usocket:timeout-error ()
-      (fmt-err "~%Endpoint not responding.~%"))
+      (fmt-err "~%[error] Endpoint not responding.~%"))
     (unknown-content-type (err)
       (fmt-err
-       "~%Unknown content type from endpoint: ~a.~%~%Server response:~%~s"
+       "~%[error] Unknown content type from endpoint: ~a.~%~%Server response:~%~s"
        (content-type err) (content err)))
     (unknown-response-format (err)
       (fmt-err
-       "~%Unknown response format from endpoint.~%~%Server response format:~%~s"
+       "~%[error] Unknown response format from endpoint.~%~%Server response format:~%~s"
        (response err)))))
 
 (defun main (&aux (args sb-ext:*posix-argv*))
