@@ -878,6 +878,8 @@ xsd:gYearMonth."
           (print-json datatype-properties :datatype-properties)
           (print-json concepts :literals)))
 
+    (usocket:connection-refused-error ()
+      (fmt-err "~%[error] Connection refused.~%"))
     (usocket:timeout-error ()
       (fmt-err "~%Endpoint not responding.~%"))
     (unknown-content-type (err)
