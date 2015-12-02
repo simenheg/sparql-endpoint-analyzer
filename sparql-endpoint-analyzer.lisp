@@ -27,7 +27,7 @@
       (when (probe-file quicklisp-init-2)
         (load quicklisp-init-2))))
 
-(let ((*standard-output* *error-output*))
+(let ((*standard-output* (make-broadcast-stream)))
   (ql:quickload :alexandria)
   (ql:quickload :cl-json)
   (ql:quickload :cl-ppcre)
