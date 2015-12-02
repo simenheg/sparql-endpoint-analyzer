@@ -314,13 +314,15 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
       (if (eq mode :paged)
           (fmt "LIMIT ~a OFFSET ~a" limit offset)
           (if hard-limit (fmt "LIMIT ~a" hard-limit) ""))))
-    (:target-type
+    (:target-types
      (fmt
-      "SELECT ?targetType WHERE {
+      "SELECT DISTINCT ?targetType WHERE {
          ?obj a <~a> .
          ?obj <~a> ?targetObj .
-         ?targetObj a ?targetType . } LIMIT 1"
-      concept property))
+         ?targetObj a ?targetType . } ~a"
+      concept
+      property
+      (if hard-limit (fmt "LIMIT ~a" hard-limit) "")))
     (:incoming-links
      (fmt
       "SELECT ~a ?prop WHERE {
@@ -521,11 +523,21 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
                   outgoing-links))))
 
 (defun add-link-types (concept)
-  (dolist (link (concept-outgoing-links concept))
-    (when-let ((target-uri
-                (retrieve
-                 :target-type (concept-uri concept) (link-uri link))))
-      (setf (link-target-uri link) (first (first target-uri))))))
+  "Add target types for the outgoing links in CONCEPT.
+Links with multiple possible target types will be duplicated once per
+additional target type."
+  (let ((outgoing-links (concept-outgoing-links concept)))
+    ;; Throw away the links, we'll add them again below with target types
+    ;; attached.
+    (setf (concept-outgoing-links concept) nil)
+    (dolist (link outgoing-links)
+      (when-let ((target-uris
+                  (retrieve
+                   :target-types (concept-uri concept) (link-uri link))))
+        (dolist (target-uri (mapcar #'first target-uris))
+          (let ((new-link (make-link :uri (link-uri link)
+                                     :target-uri target-uri)))
+            (push new-link (concept-outgoing-links concept))))))))
 
 (defun add-incoming-links (concept concept-list)
   (dolist (link (concept-outgoing-links concept))
