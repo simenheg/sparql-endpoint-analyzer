@@ -463,6 +463,30 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
        :page-limit (let ((page-limit (parse-integer (conf :page-limit))))
                      (and (/= page-limit 0) page-limit))))))
 
+;; --------------------------------------------------------------- [ Labels ]
+(defgeneric add-label (obj)
+  (:documentation
+   "Add a label to OBJ, if defined by rdfs:label in the dataset."))
+
+(defun prettify-label (label)
+  "Return a pretty LABEL, removing underscores and fixing CamelCase."
+  (unless (emptyp label)
+    (setq label (substitute #\Space #\_ label))
+
+    (let ((split-label
+           (split "(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])" label)))
+      ;; Above regex works like the following:
+      ;;  "lowercase"     => ("lowercase")
+      ;;  "CamelCase"     => ("Camel" "Case")
+      ;;  "CAPSThenCamel" => ("CAPS" "Then" "Camel")
+      (fmt
+       "~{~a~^ ~}"
+       (cons
+        (first split-label)
+        (mapcar
+         (lambda (w) (if (every #'upper-case-p w) w (string-downcase w)))
+         (rest split-label)))))))
+
 ;; ------------------------------------------------------------- [ Concepts ]
 (defstruct concept
   (uri "" :type string)
@@ -474,6 +498,10 @@ HARD-LIMIT sets a limit for the query through the SPARQL LIMIT keyword."
   (display 'false)
   (primary 'true :type symbol)
   (literals '() :type list))
+
+(defmethod add-label ((concept concept))
+  (when-let ((label (caar (retrieve :label (concept-uri concept)))))
+    (setf (concept-label concept) label)))
 
 (defun get-concept (uri concept-list)
   "Return concept with URI from CONCEPT-LIST."
@@ -632,11 +660,6 @@ xsd:gYearMonth."
               (setf (literal-range-min literal) (first limits)
                     (literal-range-max literal) (second limits))))))))
 
-(defun add-label (concept)
-  "Add label to CONCEPT, if defined by rdfs:label in the dataset."
-  (when-let ((label (caar (retrieve :label (concept-uri concept)))))
-    (setf (concept-label concept) label)))
-
 (defun remove-undefined-links (concept concept-list)
   "Remove links from CONCEPT with undefined target types.
 Defined target types are determined by CONCEPT-LIST."
@@ -675,25 +698,6 @@ Defined target types are determined by CONCEPT-LIST."
    (uri-prefix uri) "_"
    (substitute #\_ #\. (uri-resource uri))))
 
-(defun prettify-label (label)
-  "Return a pretty LABEL, removing underscores and fixing CamelCase."
-  (unless (emptyp label)
-    (setq label (substitute #\Space #\_ label))
-
-    (let ((split-label
-           (split "(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])" label)))
-      ;; Above regex works like the following:
-      ;;  "lowercase"     => ("lowercase")
-      ;;  "CamelCase"     => ("Camel" "Case")
-      ;;  "CAPSThenCamel" => ("CAPS" "Then" "Camel")
-      (fmt
-       "~{~a~^ ~}"
-       (cons
-        (first split-label)
-        (mapcar
-         (lambda (w) (if (every #'upper-case-p w) w (string-downcase w)))
-         (rest split-label)))))))
-
 (defun uri-to-plist (uri)
   `(:|id|    ,(resource-to-id uri)
     :|uri|   ,uri
@@ -713,6 +717,10 @@ Defined target types are determined by CONCEPT-LIST."
 (defstruct property
   (uri "" :type string)
   (label "" :type string))
+
+(defmethod add-label ((property property))
+  (when-let ((label (caar (retrieve :label (property-uri property)))))
+    (setf (property-label property) label)))
 
 (defun extract-datatype-properties (concepts)
   (let ((datatype-properties '()))
@@ -864,6 +872,10 @@ Defined target types are determined by CONCEPT-LIST."
         (let ((*deprecated-uris* (mapcar #'first (retrieve :deprecated-uris)))
               (datatype-properties (extract-datatype-properties concepts))
               (object-properties (extract-object-properties concepts)))
+
+          ;; Look for labels for the datatype and object properties
+          (mapc #'add-label datatype-properties)
+          (mapc #'add-label object-properties)
 
           ;; Sort concept-, datatype property- and object property lists
           (setf concepts (sort concepts #'string< :key #'concept-label))
