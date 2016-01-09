@@ -27,11 +27,13 @@
   result into the file ~output.js~.
 
 * Configuration
-  A configuration file for the SPARQL endpoint analyzer consists of 8
+  A configuration file for the SPARQL endpoint analyzer consists of 10
   sections, described below. For a sample configuration file, see the next
   section.
 
   - ~endpoint~: URL of the SPARQL endpoint of interest.
+  - ~username~: optional username for HTTP Basic authentication.
+  - ~password~: optional password for HTTP Basic authentication.
   - ~hard-limit~: hard limit for each query sent, *before* filtering is
     done. This affects the number of retrieved concepts, literals, links and
     subclass relations.
@@ -63,6 +65,10 @@
 
   [endpoint]
   http://data.computas.com:3030/sparql
+
+  [username]
+
+  [password]
 
   [hard-limit]
   10000

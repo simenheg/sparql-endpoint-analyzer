@@ -2,7 +2,7 @@
 
 ;;; sparql-endpoint-analyzer.lisp --- SPARQL endpoint analyzer for PepeSearch
 
-;; Copyright (C) 2013-2015 Simen Heggestøyl
+;; Copyright (C) 2013-2016 Simen Heggestøyl
 
 ;; This program is free software: you can redistribute it and/or modify it
 ;; under the terms of the GNU General Public License as published by the Free
@@ -158,18 +158,30 @@ following criteria:
 (define-condition unknown-response-format (error)
   ((response :initarg :response :reader response)))
 
+(define-condition unauthorized (error)
+  ((reason :initarg :reason :reader reason)))
+
 (defun sparql-query (endpoint query)
   "Send QUERY to ENDPOINT; return result as string."
   (let ((url (fmt "~a?query=~a&output=~a"
                   endpoint (drakma:url-encode query :utf-8) "json")))
-    (multiple-value-bind (res status headers)
+    (multiple-value-bind (res status headers uri stream must-close reason)
         (drakma:http-request
          url
          :preserve-uri t
-         :accept "application/json, application/sparql-results+json, application/xml,application/sparql-results+xml")
-      (declare (ignore status))
+         :accept (strcat "application/json,"
+                         "application/sparql-results+json,"
+                         "application/xml,"
+                         "application/sparql-results+xml")
+         :basic-authorization (let ((username (conf :username))
+                                    (password (conf :password)))
+                                (and username password
+                                     (list username password))))
+      (declare (ignore uri stream must-close))
       (when (search "timed out" res :test #'equal)
         (error 'sparql-transaction-time-out))
+      (when (= status 401)
+        (error 'unauthorized :reason reason))
       (values
        (if (stringp res)
            res
@@ -915,7 +927,13 @@ Defined target types are determined by CONCEPT-LIST."
     (unknown-response-format (err)
       (fmt-err
        "~%[error] Unknown response format from endpoint.~%~%Server response format:~%~s"
-       (response err)))))
+       (response err)))
+    (unauthorized (err)
+      (fmt-err
+       "~%[error] Unauthorized; lacking valid authentication credentials.
+        Server response: ~s.
+        Try setting [username] and [password] in the configuration file.~%"
+       (reason err)))))
 
 (defun main (&aux (args sb-ext:*posix-argv*))
   (if (find "compile" args :test #'string=)
