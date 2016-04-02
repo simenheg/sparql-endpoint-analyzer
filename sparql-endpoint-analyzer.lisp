@@ -278,8 +278,8 @@ of URI lists."
 
 (defun split-uri (uri)
   "Split URI into stem and resource. The split is done at the last
-  occurrence of `/' or `#'."
-  (when-let ((pos (position-if (lambda (c) (find c "/#")) uri :from-end t)))
+  occurrence of `/', `#', or `:'."
+  (when-let ((pos (position-if (lambda (c) (find c "/#:")) uri :from-end t)))
     (values (take (+ pos 1) uri) (subseq uri (+ pos 1) (length uri)))))
 
 (defun uri-stem (uri)

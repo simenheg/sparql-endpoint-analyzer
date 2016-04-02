@@ -16,19 +16,20 @@
   (assert-equal "CAPS Then Camel" (prettify-label "CAPS_Then_Camel")))
 
 (define-test split-uri
-  (assert-equal
-   "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-   (uri-stem "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
-  (assert-equal
-   "type"
-   (uri-resource "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"))
-  (assert-equal
-   "http://data.computas.com/informasjonsmodell/organisasjon/"
-   (uri-stem
-  "http://data.computas.com/informasjonsmodell/organisasjon/Enhet"))
-  (assert-equal
-   "Enhet"
-   (uri-resource "http://data.computas.com/informasjonsmodell/organisasjon/Enhet")))
+  (multiple-value-bind (stem resource)
+      (split-uri "http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+    (assert-equal stem "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+    (assert-equal resource "type"))
+  (multiple-value-bind (stem resource)
+      (split-uri
+       "http://data.computas.com/informasjonsmodell/organisasjon/Enhet")
+    (assert-equal
+     stem "http://data.computas.com/informasjonsmodell/organisasjon/")
+    (assert-equal resource "Enhet"))
+  (multiple-value-bind (stem resource)
+      (split-uri "http://bio2rdf.org/bio2rdf_vocabulary:uri")
+    (assert-equal stem "http://bio2rdf.org/bio2rdf_vocabulary:")
+    (assert-equal resource "uri")))
 
 (define-test to-json
   (assert-equal
