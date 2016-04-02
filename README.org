@@ -27,13 +27,15 @@
   result into the file ~output.js~.
 
 * Configuration
-  A configuration file for the SPARQL endpoint analyzer consists of 10
+  A configuration file for the SPARQL endpoint analyzer consists of 11
   sections, described below. For a sample configuration file, see the next
   section.
 
   - ~endpoint~: URL of the SPARQL endpoint of interest.
   - ~username~: optional username for HTTP Basic authentication.
   - ~password~: optional password for HTTP Basic authentication.
+  - ~output-level~: how verbose the program should be. Set this to
+    "debug" to get a detailed log of all queries sent.
   - ~hard-limit~: hard limit for each query sent, *before* filtering is
     done. This affects the number of retrieved concepts, literals, links and
     subclass relations.
@@ -69,6 +71,9 @@
   [username]
 
   [password]
+
+  [output-level]
+  normal
 
   [hard-limit]
   10000
@@ -109,29 +114,29 @@
   The PepeSearch configuration file is in the JSON (JavaScript Object
   Notation) data format, which integrates naturally with the existing
   JavaScript code base. Four categories of data are collected in this file:
-  
+
    - Types
    - Object properties
    - Datatype properties
    - Subclass relations
-  
+
   For each of these categories, further details are elaborated on in the
   sections that follow.
 
 ** Types
    Every type found in the dataset is recorded. That is, every ~?type~ matched
    by the following RDF triple:
-   
+
    #+BEGIN_SRC sparql
        ?concept a ?type .
    #+END_SRC
-   
+
    Types are mapped to concepts in the user interface. Together with its URI,
    each type entry also contains a short ID for convenience, a human-readable
    label with possible translations, the ID of a human-readable datatype
    property for use in the interface, and whether or not the type has any
    subtypes.
-   
+
    Example entry:
    #+BEGIN_SRC javascript
      {
@@ -149,7 +154,7 @@
    We define an object property as any RDF property linking two resources that
    have an RDF type. That is, every ~?object_property~ matched by the
    following RDF graph:
-   
+
    #+BEGIN_SRC sparql
      ?subject a ?subject_type .
      ?subject ?object_property ?object .

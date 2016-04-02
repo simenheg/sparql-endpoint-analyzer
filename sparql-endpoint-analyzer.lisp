@@ -165,6 +165,8 @@ following criteria:
   "Send QUERY to ENDPOINT; return result as string."
   (let ((url (fmt "~a?query=~a&output=~a"
                   endpoint (drakma:url-encode query :utf-8) "json")))
+    (when (equal (conf :output-level) "debug")
+      (fmt-err "~%[debug] Sending query:~%~a~%" query))
     (multiple-value-bind (res status headers uri stream must-close reason)
         (drakma:http-request
          url
