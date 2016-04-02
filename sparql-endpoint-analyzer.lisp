@@ -708,7 +708,8 @@ Defined target types are determined by CONCEPT-LIST."
 (defun resource-to-id (uri)
   (strcat
    (uri-prefix uri) "_"
-   (substitute #\_ #\. (uri-resource uri))))
+   ;; Replace "dangerous" characters with underscore
+   (substitute-if #\_ (lambda (char) (find char ".-")) (uri-resource uri))))
 
 (defun uri-to-plist (uri)
   `(:|id|    ,(resource-to-id uri)

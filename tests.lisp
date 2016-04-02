@@ -51,6 +51,16 @@
   (assert-equal "\"SYMBOL\"" (to-json 'symbol))
   (assert-equal "\"KEYWORD\"" (to-json :keyword)))
 
+(define-test resource-to-id
+  (let ((*config* (list :prefix-map (make-hash-table))))
+    (assert-equal
+     "rdf_label"
+     (resource-to-id "http://www.w3.org/2000/01/rdf-schema#label"))
+    (assert-equal
+     "vir_array_of_string"
+     (resource-to-id
+      "http://www.openlinksw.com/schemas/virtrdf#array-of-string"))))
+
 (define-test util
   (assert-equal "XLII" (fmt "~@R" 42))
   (assert-true (looks-like-plist-p '(:a 1 :b 2 :c 3)))
